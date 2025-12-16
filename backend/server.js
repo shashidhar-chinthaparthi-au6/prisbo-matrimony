@@ -19,24 +19,45 @@ dotenv.config();
 // Connect to database (with error handling for serverless)
 // Don't block server startup - connect in background
 let dbConnected = false;
+let dbConnectionPromise = null;
+
 const connectDatabase = async () => {
-  if (!dbConnected) {
+  if (dbConnected) {
+    return;
+  }
+  
+  if (dbConnectionPromise) {
+    return dbConnectionPromise;
+  }
+  
+  dbConnectionPromise = (async () => {
     try {
-      await connectDB();
-      dbConnected = true;
-      console.log('Database connected successfully');
+      if (process.env.MONGODB_URI) {
+        await connectDB();
+        dbConnected = true;
+        console.log('Database connected successfully');
+      } else {
+        console.warn('MONGODB_URI not set - database features will be unavailable');
+      }
     } catch (error) {
       console.error('Database connection error:', error.message);
       // Don't exit - allow server to run without DB for health checks
       // Routes that need DB will handle the error
+      dbConnectionPromise = null; // Allow retry
     }
-  }
+  })();
+  
+  return dbConnectionPromise;
 };
 
 // Connect to database in background (non-blocking)
-connectDatabase().catch(err => {
-  console.error('Failed to connect to database:', err.message);
-});
+if (process.env.MONGODB_URI) {
+  connectDatabase().catch(err => {
+    console.error('Failed to connect to database:', err.message);
+  });
+} else {
+  console.warn('MONGODB_URI environment variable not set');
+}
 
 const app = express();
 
@@ -132,13 +153,27 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: 'Route not found',
+    path: req.path,
+  });
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error('Error:', err.message);
-  console.error('Stack:', err.stack);
+  // Don't log stack in production for security
+  if (process.env.NODE_ENV === 'development') {
+    console.error('Error:', err.message);
+    console.error('Stack:', err.stack);
+  } else {
+    console.error('Error:', err.message);
+  }
   
   // Handle CORS errors specifically
-  if (err.message === 'Not allowed by CORS') {
+  if (err.message && err.message.includes('CORS')) {
     return res.status(403).json({
       success: false,
       message: 'CORS: Origin not allowed',
@@ -149,6 +184,7 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({
     success: false,
     message: err.message || 'Server Error',
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
   });
 });
 
