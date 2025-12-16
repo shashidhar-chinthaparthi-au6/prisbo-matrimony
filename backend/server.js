@@ -25,7 +25,9 @@ const app = express();
 const corsOptions = {
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
+    if (!origin) {
+      return callback(null, true);
+    }
 
     // List of allowed origins
     const allowedOrigins = [
@@ -37,23 +39,36 @@ const corsOptions = {
 
     // Check if origin is in allowed list
     if (allowedOrigins.includes(origin)) {
+      console.log('CORS: Allowed origin (from env):', origin);
       return callback(null, true);
     }
 
     // Allow Vercel preview URLs (pattern: *.vercel.app)
-    if (origin.includes('.vercel.app')) {
+    if (origin && origin.includes('.vercel.app')) {
+      console.log('CORS: Allowed Vercel origin:', origin);
       return callback(null, true);
     }
 
+    // Log rejected origins for debugging
+    console.log('CORS: Rejected origin:', origin);
+    console.log('CORS: Allowed origins:', allowedOrigins);
+
     // Reject other origins
-    callback(new Error('Not allowed by CORS'));
+    callback(null, false);
   },
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Content-Type', 'Authorization'],
   optionsSuccessStatus: 200, // Some legacy browsers (IE11, various SmartTVs) choke on 204
+  preflightContinue: false,
 };
 
-// Middleware
+// Apply CORS middleware
 app.use(cors(corsOptions));
+
+// Explicitly handle OPTIONS requests for preflight (must be before other routes)
+app.options('*', cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -90,7 +105,13 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
-});
+// Start server only if not in Vercel serverless environment
+if (process.env.VERCEL !== '1') {
+  app.listen(PORT, () => {
+    console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+  });
+}
+
+// Export for Vercel serverless functions
+export default app;
 
