@@ -16,8 +16,25 @@ import notificationRoutes from './routes/notificationRoutes.js';
 // Load env vars
 dotenv.config();
 
+// Connect to database (with error handling for serverless)
+let dbConnected = false;
+const connectDatabase = async () => {
+  if (!dbConnected) {
+    try {
+      await connectDB();
+      dbConnected = true;
+    } catch (error) {
+      console.error('Database connection error:', error);
+      // Don't exit in serverless environment
+      if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+        process.exit(1);
+      }
+    }
+  }
+};
+
 // Connect to database
-connectDB();
+connectDatabase();
 
 const app = express();
 
@@ -25,6 +42,10 @@ const app = express();
 const allowedOrigins = [
   process.env.WEB_URL,
   process.env.MOBILE_URL,
+  // Vercel deployment URLs
+  'https://prisbo-matrimony.vercel.app',
+  'https://prisbo-matrimony-git-main-shashis-projects-f331eae3.vercel.app',
+  'https://prisbo-matrimony-fd6pdn85t-shashis-projects-f331eae3.vercel.app',
   // Add localhost for development
   'http://localhost:3000',
   'http://localhost:5173',
@@ -35,6 +56,11 @@ app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps, Postman, etc.)
     if (!origin) return callback(null, true);
+    
+    // Allow any Vercel preview URL
+    if (origin.includes('.vercel.app')) {
+      return callback(null, true);
+    }
     
     if (allowedOrigins.includes(origin) || process.env.NODE_ENV === 'development') {
       callback(null, true);
@@ -82,7 +108,13 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
-});
+// Only listen if not in Vercel serverless environment
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+  });
+}
+
+// Export for Vercel serverless functions
+export default app;
 
