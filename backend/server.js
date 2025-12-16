@@ -17,40 +17,81 @@ import notificationRoutes from './routes/notificationRoutes.js';
 dotenv.config();
 
 // Connect to database (with error handling for serverless)
-// Don't block server startup - connect in background
-let dbConnected = false;
+// For serverless, we need to ensure connection is ready before routes execute
 let dbConnectionPromise = null;
 
 const connectDatabase = async () => {
-  if (dbConnected) {
-    return;
+  // If already connected, return immediately
+  const mongoose = await import('mongoose');
+  if (mongoose.default.connection.readyState === 1) {
+    return mongoose.default.connection;
   }
   
+  // If connection is in progress, wait for it
   if (dbConnectionPromise) {
     return dbConnectionPromise;
   }
   
+  // Start new connection
   dbConnectionPromise = (async () => {
     try {
       if (process.env.MONGODB_URI) {
         await connectDB();
-        dbConnected = true;
         console.log('Database connected successfully');
+        return mongoose.default.connection;
       } else {
-        console.warn('MONGODB_URI not set - database features will be unavailable');
+        throw new Error('MONGODB_URI not set');
       }
     } catch (error) {
       console.error('Database connection error:', error.message);
-      // Don't exit - allow server to run without DB for health checks
-      // Routes that need DB will handle the error
       dbConnectionPromise = null; // Allow retry
+      throw error;
     }
   })();
   
   return dbConnectionPromise;
 };
 
-// Connect to database in background (non-blocking)
+// Middleware to ensure database is connected before route handlers
+const ensureDBConnection = async (req, res, next) => {
+  // Skip DB check for health endpoint
+  if (req.path === '/api/health') {
+    return next();
+  }
+  
+  try {
+    // Ensure connection is ready
+    const mongoose = await import('mongoose');
+    
+    // If already connected, proceed
+    if (mongoose.default.connection.readyState === 1) {
+      return next();
+    }
+    
+    // If connecting, wait for it
+    if (mongoose.default.connection.readyState === 2) {
+      await new Promise((resolve, reject) => {
+        mongoose.default.connection.once('connected', resolve);
+        mongoose.default.connection.once('error', reject);
+        setTimeout(() => reject(new Error('Connection timeout')), 10000);
+      });
+      return next();
+    }
+    
+    // If not connected, try to connect
+    await connectDatabase();
+    next();
+  } catch (error) {
+    console.error('Database connection required:', error.message);
+    return res.status(503).json({
+      success: false,
+      message: 'Database connection unavailable. Please try again.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+    });
+  }
+};
+
+// Start connection in background (non-blocking for server startup)
 if (process.env.MONGODB_URI) {
   connectDatabase().catch(err => {
     console.error('Failed to connect to database:', err.message);
@@ -132,6 +173,9 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Ensure database connection before API routes (except health check)
+app.use('/api', ensureDBConnection);
 
 // Routes
 app.use('/api/auth', authRoutes);

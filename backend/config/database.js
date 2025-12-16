@@ -22,8 +22,12 @@ const connectDB = async () => {
   }
 
   // Create new connection promise
+  // Use bufferCommands: true for serverless to allow commands to queue
   cached.promise = mongoose.connect(process.env.MONGODB_URI, {
-    bufferCommands: false,
+    bufferCommands: true, // Allow commands to buffer while connecting
+    maxPoolSize: 10,
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 45000,
   }).then((conn) => {
     console.log(`MongoDB Connected: ${conn.connection.host}`);
     cached.conn = conn;
