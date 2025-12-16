@@ -21,11 +21,39 @@ connectDB();
 
 const app = express();
 
-// Middleware
-app.use(cors({
-  origin: [process.env.WEB_URL, process.env.MOBILE_URL],
+// CORS configuration
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+
+    // List of allowed origins
+    const allowedOrigins = [
+      process.env.WEB_URL,
+      process.env.MOBILE_URL,
+      'http://localhost:5173', // Local development
+      'http://localhost:3000', // Alternative local port
+    ].filter(Boolean); // Remove undefined values
+
+    // Check if origin is in allowed list
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    // Allow Vercel preview URLs (pattern: *.vercel.app)
+    if (origin.includes('.vercel.app')) {
+      return callback(null, true);
+    }
+
+    // Reject other origins
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
-}));
+  optionsSuccessStatus: 200, // Some legacy browsers (IE11, various SmartTVs) choke on 204
+};
+
+// Middleware
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
