@@ -17,61 +17,91 @@ import notificationRoutes from './routes/notificationRoutes.js';
 dotenv.config();
 
 // Connect to database (with error handling for serverless)
+// Don't block server startup - connect in background
 let dbConnected = false;
 const connectDatabase = async () => {
   if (!dbConnected) {
     try {
       await connectDB();
       dbConnected = true;
+      console.log('Database connected successfully');
     } catch (error) {
-      console.error('Database connection error:', error);
-      // Don't exit in serverless environment
-      if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
-        process.exit(1);
-      }
+      console.error('Database connection error:', error.message);
+      // Don't exit - allow server to run without DB for health checks
+      // Routes that need DB will handle the error
     }
   }
 };
 
-// Connect to database
-connectDatabase();
+// Connect to database in background (non-blocking)
+connectDatabase().catch(err => {
+  console.error('Failed to connect to database:', err.message);
+});
 
 const app = express();
 
-// Middleware - CORS Configuration
-const allowedOrigins = [
-  process.env.WEB_URL,
-  process.env.MOBILE_URL,
-  // Vercel deployment URLs
-  'https://prisbo-matrimony.vercel.app',
-  'https://prisbo-matrimony-git-main-shashis-projects-f331eae3.vercel.app',
-  'https://prisbo-matrimony-fd6pdn85t-shashis-projects-f331eae3.vercel.app',
-  // Add localhost for development
-  'http://localhost:3000',
-  'http://localhost:5173',
-  'http://localhost:8080',
-].filter(Boolean); // Remove undefined values
-
-app.use(cors({
+// CORS Configuration - Must be first middleware
+const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps, Postman, etc.)
-    if (!origin) return callback(null, true);
-    
-    // Allow any Vercel preview URL
-    if (origin.includes('.vercel.app')) {
+    // Allow requests with no origin (like mobile apps, Postman, curl, etc.)
+    if (!origin) {
       return callback(null, true);
     }
     
-    if (allowedOrigins.includes(origin) || process.env.NODE_ENV === 'development') {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
+    // Always allow any Vercel preview/deployment URL (covers all preview URLs)
+    // This includes: *.vercel.app domains
+    if (origin.includes('.vercel.app')) {
+      console.log('CORS: Allowing Vercel origin:', origin);
+      return callback(null, true);
     }
+    
+    // Allow localhost for development
+    if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
+      return callback(null, true);
+    }
+    
+    // Allow specific origins from environment
+    const allowedOrigins = [
+      process.env.WEB_URL,
+      process.env.MOBILE_URL,
+    ].filter(Boolean);
+    
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    // In development, allow all origins
+    if (process.env.NODE_ENV === 'development') {
+      return callback(null, true);
+    }
+    
+    // Log blocked origin for debugging
+    console.log('CORS: Blocked origin:', origin);
+    console.log('CORS: Allowed origins:', allowedOrigins);
+    callback(new Error(`CORS: Origin ${origin} not allowed`));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-}));
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  exposedHeaders: ['Content-Type', 'Authorization'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204,
+  maxAge: 86400, // 24 hours
+};
+
+// Apply CORS middleware first
+app.use(cors(corsOptions));
+
+// Handle preflight requests explicitly (additional safety)
+app.options('*', cors(corsOptions));
+
+// Request logging middleware (for debugging)
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.path} - Origin: ${req.headers.origin || 'none'}`);
+  next();
+});
+
+// Body parsing middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -104,7 +134,18 @@ app.get('/api/health', (req, res) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error('Error:', err.message);
+  console.error('Stack:', err.stack);
+  
+  // Handle CORS errors specifically
+  if (err.message === 'Not allowed by CORS') {
+    return res.status(403).json({
+      success: false,
+      message: 'CORS: Origin not allowed',
+      origin: req.headers.origin,
+    });
+  }
+  
   res.status(err.status || 500).json({
     success: false,
     message: err.message || 'Server Error',
