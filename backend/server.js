@@ -22,14 +22,20 @@ const app = express();
 
 // Connect to database (non-blocking for serverless)
 // Don't exit on failure - allow the app to start and handle requests
-connectDB().catch((error) => {
-  console.error('Database connection error:', error.message);
-  // Don't exit in serverless environment - allow function to handle requests
-  // even if DB is temporarily unavailable
-  if (!process.env.VERCEL) {
-    process.exit(1);
-  }
-});
+// Wrap in try-catch to prevent any unhandled errors from crashing the function
+try {
+  connectDB().catch((error) => {
+    console.error('Database connection error:', error.message);
+    // Don't exit in serverless environment - allow function to handle requests
+    // even if DB is temporarily unavailable
+    if (!process.env.VERCEL) {
+      process.exit(1);
+    }
+  });
+} catch (error) {
+  console.error('Error initializing database connection:', error.message);
+  // Continue anyway - app should still be able to handle requests
+}
 
 // CORS configuration
 const corsOptions = {
