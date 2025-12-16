@@ -16,10 +16,18 @@ import notificationRoutes from './routes/notificationRoutes.js';
 // Load env vars
 dotenv.config();
 
-// Connect to database
-connectDB();
-
 const app = express();
+
+// Connect to database (non-blocking for serverless)
+// Don't exit on failure - allow the app to start and handle requests
+connectDB().catch((error) => {
+  console.error('Database connection error:', error.message);
+  // Don't exit in serverless environment - allow function to handle requests
+  // even if DB is temporarily unavailable
+  if (!process.env.VERCEL) {
+    process.exit(1);
+  }
+});
 
 // CORS configuration
 const corsOptions = {
@@ -64,10 +72,12 @@ const corsOptions = {
   preflightContinue: false,
 };
 
-// Apply CORS middleware
+// Apply CORS middleware FIRST - before any other middleware
+// This ensures CORS headers are always set, even if other middleware fails
 app.use(cors(corsOptions));
 
 // Explicitly handle OPTIONS requests for preflight (must be before other routes)
+// Use CORS middleware to ensure proper origin validation
 app.options('*', cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
