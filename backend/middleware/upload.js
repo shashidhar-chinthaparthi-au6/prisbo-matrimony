@@ -7,15 +7,27 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Create uploads directory if it doesn't exist
+// Note: In serverless environments (Vercel), directories are read-only
+// File uploads should use S3 instead of local storage
 const uploadsDir = path.join(__dirname, '../uploads');
 const profilesDir = path.join(uploadsDir, 'profiles');
 const chatDir = path.join(uploadsDir, 'chat');
 
-[uploadsDir, profilesDir, chatDir].forEach(dir => {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+// Only create directories if not in serverless environment
+// Wrap in try-catch to prevent crashes if directory creation fails
+try {
+  if (!process.env.VERCEL && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    [uploadsDir, profilesDir, chatDir].forEach(dir => {
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+    });
   }
-});
+} catch (error) {
+  // Silently fail - directories might not be writable in serverless
+  // File uploads will use S3 in production anyway
+  console.warn('Could not create upload directories (this is normal in serverless):', error.message);
+}
 
 // Configure storage for local file system
 const storage = multer.diskStorage({
