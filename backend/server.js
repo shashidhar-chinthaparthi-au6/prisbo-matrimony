@@ -106,12 +106,14 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 
 // Start server only if not in Vercel serverless environment
-if (process.env.VERCEL !== '1') {
+// Vercel sets VERCEL=1 automatically
+if (!process.env.VERCEL) {
   app.listen(PORT, () => {
     console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
   });
 }
 
 // Export for Vercel serverless functions
+// Vercel expects a default export for serverless functions
 export default app;
 
