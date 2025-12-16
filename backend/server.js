@@ -1,8 +1,6 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import connectDB from './config/database.js';
 
 // Import routes
@@ -18,88 +16,45 @@ import notificationRoutes from './routes/notificationRoutes.js';
 // Load env vars
 dotenv.config();
 
+// Connect to database
+connectDB();
+
 const app = express();
 
-// Connect to database (non-blocking for serverless)
-// Don't exit on failure - allow the app to start and handle requests
-// Wrap in try-catch to prevent any unhandled errors from crashing the function
-try {
-  connectDB().catch((error) => {
-    console.error('Database connection error:', error.message);
-    // Don't exit in serverless environment - allow function to handle requests
-    // even if DB is temporarily unavailable
-    if (!process.env.VERCEL) {
-      process.exit(1);
+// Middleware - CORS Configuration
+const allowedOrigins = [
+  process.env.WEB_URL,
+  process.env.MOBILE_URL,
+  // Add localhost for development
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://localhost:8080',
+].filter(Boolean); // Remove undefined values
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin) || process.env.NODE_ENV === 'development') {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
     }
-  });
-} catch (error) {
-  console.error('Error initializing database connection:', error.message);
-  // Continue anyway - app should still be able to handle requests
-}
-
-// CORS configuration
-const corsOptions = {
-  origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) {
-      return callback(null, true);
-    }
-
-    // List of allowed origins
-    const allowedOrigins = [
-      process.env.WEB_URL,
-      process.env.MOBILE_URL,
-      'http://localhost:5173', // Local development
-      'http://localhost:3000', // Alternative local port
-    ].filter(Boolean); // Remove undefined values
-
-    // Check if origin is in allowed list
-    if (allowedOrigins.includes(origin)) {
-      console.log('CORS: Allowed origin (from env):', origin);
-      return callback(null, true);
-    }
-
-    // Allow Vercel preview URLs (pattern: *.vercel.app)
-    if (origin && origin.includes('.vercel.app')) {
-      console.log('CORS: Allowed Vercel origin:', origin);
-      return callback(null, true);
-    }
-
-    // Log rejected origins for debugging
-    console.log('CORS: Rejected origin:', origin);
-    console.log('CORS: Allowed origins:', allowedOrigins);
-
-    // Reject other origins
-    callback(null, false);
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  exposedHeaders: ['Content-Type', 'Authorization'],
-  optionsSuccessStatus: 200, // Some legacy browsers (IE11, various SmartTVs) choke on 204
-  preflightContinue: false,
-};
-
-// Apply CORS middleware FIRST - before any other middleware
-// This ensures CORS headers are always set, even if other middleware fails
-app.use(cors(corsOptions));
-
-// Explicitly handle OPTIONS requests for preflight (must be before other routes)
-// Use CORS middleware to ensure proper origin validation
-app.options('*', cors(corsOptions));
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Serve static files from uploads directory
+import path from 'path';
+import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-// Only serve static files if uploads directory exists (skip in serverless if not needed)
-try {
-  app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-} catch (error) {
-  console.warn('Static files directory not available:', error.message);
-}
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -111,19 +66,9 @@ app.use('/api/chats', chatRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
 
-// Health check (simple endpoint that doesn't require DB)
+// Health check
 app.get('/api/health', (req, res) => {
-  res.json({ 
-    success: true, 
-    message: 'Prisbo API is running',
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
-  });
-});
-
-// Simple test endpoint for CORS verification
-app.get('/api/test', (req, res) => {
-  res.json({ success: true, message: 'CORS test endpoint' });
+  res.json({ success: true, message: 'Prisbo API is running' });
 });
 
 // Error handling middleware
@@ -137,15 +82,7 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 
-// Start server only if not in Vercel serverless environment
-// Vercel sets VERCEL=1 automatically
-if (!process.env.VERCEL) {
-  app.listen(PORT, () => {
-    console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
-  });
-}
-
-// Export for Vercel serverless functions
-// Vercel with @vercel/node automatically handles Express app exports
-export default app;
+app.listen(PORT, () => {
+  console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+});
 
