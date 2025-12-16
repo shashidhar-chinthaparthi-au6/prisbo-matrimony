@@ -1,6 +1,8 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import connectDB from './config/database.js';
 
 // Import routes
@@ -83,11 +85,15 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Serve static files from uploads directory
-import path from 'path';
-import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Only serve static files if uploads directory exists (skip in serverless if not needed)
+try {
+  app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+} catch (error) {
+  console.warn('Static files directory not available:', error.message);
+}
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -99,9 +105,19 @@ app.use('/api/chats', chatRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
 
-// Health check
+// Health check (simple endpoint that doesn't require DB)
 app.get('/api/health', (req, res) => {
-  res.json({ success: true, message: 'Prisbo API is running' });
+  res.json({ 
+    success: true, 
+    message: 'Prisbo API is running',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
+// Simple test endpoint for CORS verification
+app.get('/api/test', (req, res) => {
+  res.json({ success: true, message: 'CORS test endpoint' });
 });
 
 // Error handling middleware
@@ -124,6 +140,6 @@ if (!process.env.VERCEL) {
 }
 
 // Export for Vercel serverless functions
-// Vercel expects a default export for serverless functions
+// Vercel with @vercel/node automatically handles Express app exports
 export default app;
 
