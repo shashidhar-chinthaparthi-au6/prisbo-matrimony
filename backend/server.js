@@ -92,9 +92,14 @@ app.use('/api/chats', chatRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
 
-// Health check
+// Health check (works even if DB is not connected)
 app.get('/api/health', (req, res) => {
-  res.json({ success: true, message: 'Prisbo API is running' });
+  res.json({ 
+    success: true, 
+    message: 'Prisbo API is running',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
 });
 
 // Error handling middleware
@@ -116,5 +121,6 @@ if (!process.env.VERCEL) {
 }
 
 // Export for Vercel serverless functions
+// @vercel/node automatically wraps Express apps
 export default app;
 
