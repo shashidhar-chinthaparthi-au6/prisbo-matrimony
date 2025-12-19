@@ -1,11 +1,33 @@
+import { useState, useEffect } from 'react';
 import { useQuery } from 'react-query';
 import { getFavorites, removeFavorite } from '../services/favoriteService';
+import { getCurrentSubscription } from '../services/subscriptionService';
 import { getImageUrl } from '../config/api';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import SubscriptionRequiredModal from '../components/SubscriptionRequiredModal';
 
 const Favorites = () => {
-  const { data, refetch } = useQuery('favorites', getFavorites);
+  const navigate = useNavigate();
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  
+  const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
+  const { data, refetch } = useQuery('favorites', getFavorites, {
+    retry: false,
+    onError: (error) => {
+      if (error.response?.status === 403 || error.response?.data?.requiresSubscription) {
+        setShowSubscriptionModal(true);
+      }
+    }
+  });
+
+  const hasActiveSubscription = subscriptionData?.hasActiveSubscription;
+
+  useEffect(() => {
+    if (subscriptionData && !hasActiveSubscription) {
+      setShowSubscriptionModal(true);
+    }
+  }, [subscriptionData, hasActiveSubscription]);
 
   const handleRemove = async (profileId) => {
     try {
@@ -72,6 +94,11 @@ const Favorites = () => {
           );
         })}
       </div>
+
+      <SubscriptionRequiredModal
+        isOpen={showSubscriptionModal}
+        onClose={() => setShowSubscriptionModal(false)}
+      />
     </div>
   );
 };

@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Image, ScrollView } from 'react-native';
+import { useQuery } from 'react-query';
 import { getSentInterests, getReceivedInterests, getMutualMatches, acceptInterest, rejectInterest } from '../services/interestService';
+import { getCurrentSubscription } from '../services/subscriptionService';
 import { getOrCreateChat } from '../services/chatService';
 import { getImageUrl } from '../config/api';
 import { useAuth } from '../context/AuthContext';
+import SubscriptionRequiredModal from '../components/SubscriptionRequiredModal';
 
 const InterestsScreen = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState('received');
@@ -11,15 +14,27 @@ const InterestsScreen = ({ navigation }) => {
   const [receivedInterests, setReceivedInterests] = useState([]);
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const { user } = useAuth();
 
+  const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
+  const hasActiveSubscription = subscriptionData?.hasActiveSubscription;
+
   useEffect(() => {
+    if (subscriptionData && !hasActiveSubscription) {
+      setShowSubscriptionModal(true);
+    } else if (hasActiveSubscription) {
     loadData();
     const interval = setInterval(loadData, 5000);
     return () => clearInterval(interval);
-  }, [activeTab]);
+    }
+  }, [activeTab, subscriptionData, hasActiveSubscription]);
 
   const loadData = async () => {
+    if (!hasActiveSubscription) {
+      setShowSubscriptionModal(true);
+      return;
+    }
     setLoading(true);
     try {
       if (activeTab === 'sent') {
@@ -192,6 +207,12 @@ const InterestsScreen = ({ navigation }) => {
           }
         />
       )}
+
+      <SubscriptionRequiredModal
+        isOpen={showSubscriptionModal}
+        onClose={() => setShowSubscriptionModal(false)}
+        onSubscribe={() => navigation.navigate('Subscription')}
+      />
     </View>
   );
 };

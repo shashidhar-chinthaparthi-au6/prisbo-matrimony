@@ -1,30 +1,49 @@
 import { useState, useEffect } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { useQuery } from 'react-query';
+import { getCurrentSubscription } from '../services/subscriptionService';
 import { getNotifications, markAsRead, markAllAsRead, deleteNotification, deleteAllNotifications } from '../services/notificationService';
+import SubscriptionRequiredModal from '../components/SubscriptionRequiredModal';
 
 const NotificationsScreen = ({ navigation }) => {
   const [filter, setFilter] = useState('all');
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+
+  const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
+  const hasActiveSubscription = subscriptionData?.hasActiveSubscription;
 
   const loadNotifications = async () => {
+    if (!hasActiveSubscription) {
+      setShowSubscriptionModal(true);
+      return;
+    }
     try {
       const response = await getNotifications({ unreadOnly: filter === 'unread' });
       setNotifications(response.notifications || []);
       setUnreadCount(response.unreadCount || 0);
     } catch (error) {
-      alert(error.response?.data?.message || 'Failed to load notifications');
+      if (error.response?.status === 403 || error.response?.data?.requiresSubscription) {
+        setShowSubscriptionModal(true);
+      } else {
+        alert(error.response?.data?.message || 'Failed to load notifications');
+      }
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadNotifications();
-    const interval = setInterval(loadNotifications, 5000);
-    return () => clearInterval(interval);
-  }, [filter]);
+    if (subscriptionData && !hasActiveSubscription) {
+      setShowSubscriptionModal(true);
+    } else if (hasActiveSubscription) {
+      loadNotifications();
+      const interval = setInterval(loadNotifications, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [filter, subscriptionData, hasActiveSubscription]);
 
   const handleNotificationPress = async (notification) => {
     if (!notification.isRead) {
@@ -194,6 +213,12 @@ const NotificationsScreen = ({ navigation }) => {
           <Text style={styles.emptyText}>No notifications found</Text>
         </View>
       )}
+
+      <SubscriptionRequiredModal
+        isOpen={showSubscriptionModal}
+        onClose={() => setShowSubscriptionModal(false)}
+        onSubscribe={() => navigation.navigate('Subscription')}
+      />
     </View>
   );
 };

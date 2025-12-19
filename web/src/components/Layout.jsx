@@ -24,13 +24,14 @@ const Layout = ({ children }) => {
         { path: '/admin', label: 'Admin', icon: '⚙️' },
       ]
     : [
-        { path: '/', label: 'Home', icon: '🏠' },
-        { path: '/search', label: 'Search', icon: '🔍' },
-        { path: '/interests', label: 'Interests', icon: '💝' },
-        { path: '/favorites', label: 'Favorites', icon: '⭐' },
-        { path: '/chats', label: 'Chats', icon: '💬' },
-        { path: '/profile', label: 'Profile', icon: '👤' },
-      ];
+    { path: '/', label: 'Home', icon: '🏠' },
+    { path: '/search', label: 'Search', icon: '🔍' },
+    { path: '/interests', label: 'Interests', icon: '💝' },
+    { path: '/favorites', label: 'Favorites', icon: '⭐' },
+    { path: '/chats', label: 'Chats', icon: '💬' },
+        { path: '/subscription', label: 'Subscription', icon: '💳' },
+    { path: '/profile', label: 'Profile', icon: '👤' },
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50">

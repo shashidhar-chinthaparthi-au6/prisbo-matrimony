@@ -1,9 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, FlatList, Image, StyleSheet, ActivityIndicator } from 'react-native';
+import { useQuery } from 'react-query';
 import { searchProfiles } from '../services/searchService';
 import { getMyProfile } from '../services/profileService';
+import { getCurrentSubscription } from '../services/subscriptionService';
 import { getOrCreateChat } from '../services/chatService';
 import { getImageUrl } from '../config/api';
+import SubscriptionRequiredModal from '../components/SubscriptionRequiredModal';
 
 const SearchScreen = ({ navigation }) => {
   const [filters, setFilters] = useState({
@@ -19,7 +22,11 @@ const SearchScreen = ({ navigation }) => {
   const [showFilters, setShowFilters] = useState(false);
   const [hasProfile, setHasProfile] = useState(true);
   const [checkingProfile, setCheckingProfile] = useState(true);
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const hasSearchedRef = useRef(false);
+
+  const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
+  const hasActiveSubscription = subscriptionData?.hasActiveSubscription;
 
   useEffect(() => {
     checkProfile();
@@ -29,12 +36,22 @@ const SearchScreen = ({ navigation }) => {
     // Auto-search when profile is confirmed and filters are ready (only once)
     if (hasProfile && !checkingProfile && !hasSearchedRef.current) {
       hasSearchedRef.current = true;
-      performSearch();
+      // Only perform search if user has active subscription
+      if (hasActiveSubscription) {
+        performSearch();
+      } else if (subscriptionData && !hasActiveSubscription) {
+        // Show modal if subscription data is loaded and user doesn't have active subscription
+        setShowSubscriptionModal(true);
+      }
     }
-  }, [hasProfile, checkingProfile]);
+  }, [hasProfile, checkingProfile, hasActiveSubscription, subscriptionData]);
 
   const performSearch = async () => {
     if (!hasProfile) {
+      return;
+    }
+    if (!hasActiveSubscription) {
+      setShowSubscriptionModal(true);
       return;
     }
     setLoading(true);
@@ -59,9 +76,15 @@ const SearchScreen = ({ navigation }) => {
       console.error('Search error:', error); // Debug log
       console.error('Error response:', error.response?.data); // Debug log
       setProfiles([]);
-      const errorMessage = error.response?.data?.message || error.message || 'Search failed';
-      console.error('Search failed:', errorMessage);
-      // Don't alert on auto-search, only on manual search
+      
+      // Check if it's a subscription required error
+      if (error.response?.status === 403 || error.response?.data?.requiresSubscription) {
+        setShowSubscriptionModal(true);
+      } else {
+        const errorMessage = error.response?.data?.message || error.message || 'Search failed';
+        console.error('Search failed:', errorMessage);
+        // Don't alert on auto-search, only on manual search
+      }
     } finally {
       setLoading(false);
     }
@@ -148,7 +171,13 @@ const SearchScreen = ({ navigation }) => {
   const renderProfile = ({ item }) => (
     <TouchableOpacity
       style={styles.profileCard}
-      onPress={() => navigation.navigate('ProfileDetail', { id: item._id })}
+      onPress={() => {
+        if (!hasActiveSubscription) {
+          setShowSubscriptionModal(true);
+          return;
+        }
+        navigation.navigate('ProfileDetail', { id: item._id });
+      }}
     >
       <Image
         source={item.photos?.[0]?.url ? { uri: getImageUrl(item.photos[0].url) } : require('../assets/placeholder.png')}
@@ -230,7 +259,20 @@ const SearchScreen = ({ navigation }) => {
         </View>
       )}
 
-      {loading ? (
+      {!hasActiveSubscription && subscriptionData ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyTitle}>Subscription Required</Text>
+          <Text style={styles.emptyText}>
+            You need an active subscription to search and view profiles. Please subscribe to continue.
+          </Text>
+          <TouchableOpacity
+            style={styles.createButton}
+            onPress={() => navigation.navigate('Subscription')}
+          >
+            <Text style={styles.createButtonText}>Subscribe Now</Text>
+          </TouchableOpacity>
+        </View>
+      ) : loading ? (
         <ActivityIndicator size="large" style={styles.loader} />
       ) : (
         <FlatList
@@ -242,6 +284,12 @@ const SearchScreen = ({ navigation }) => {
           }
         />
       )}
+
+      <SubscriptionRequiredModal
+        isOpen={showSubscriptionModal}
+        onClose={() => setShowSubscriptionModal(false)}
+        onSubscribe={() => navigation.navigate('Subscription')}
+      />
     </View>
   );
 };

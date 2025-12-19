@@ -1,26 +1,45 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from 'react-query';
-import { getProfileById } from '../services/profileService';
+import { getProfileById, getMyProfile } from '../services/profileService';
+import { getCurrentSubscription } from '../services/subscriptionService';
 import { sendInterest } from '../services/interestService';
 import { addFavorite, removeFavorite } from '../services/favoriteService';
 import { getOrCreateChat } from '../services/chatService';
 import { getImageUrl } from '../config/api';
 import toast from 'react-hot-toast';
+import SubscriptionRequiredModal from '../components/SubscriptionRequiredModal';
 
 const ProfileDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [isFavorite, setIsFavorite] = useState(false);
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
 
   const { data, isLoading, refetch } = useQuery(['profile', id], () => getProfileById(id));
+  const { data: myProfileData } = useQuery('myProfile', getMyProfile);
+  const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
+
+  const hasActiveSubscription = subscriptionData?.hasActiveSubscription;
+  const isMyProfile = myProfileData?.profile?.userId?._id === data?.profile?.userId?._id;
+
+  useEffect(() => {
+    // Check if subscription is required when profile loads
+    if (data?.profile && !isMyProfile && !hasActiveSubscription) {
+      setShowSubscriptionModal(true);
+    }
+  }, [data, isMyProfile, hasActiveSubscription]);
 
   const handleSendInterest = async () => {
+    if (!hasActiveSubscription) {
+      setShowSubscriptionModal(true);
+      return;
+    }
     try {
       const response = await sendInterest({ toUserId: data.profile.userId._id });
       if (response.success) {
-        toast.success('Interest sent successfully!');
-        refetch(); // Refetch to update interest status
+      toast.success('Interest sent successfully!');
+      refetch(); // Refetch to update interest status
       }
     } catch (error) {
       // Handle "Interest already exists" case
@@ -32,13 +51,19 @@ const ProfileDetail = () => {
         }
         toast.info('Interest already sent. Status: ' + interest.status);
         refetch(); // Refetch to update interest status
+      } else if (error.response?.data?.requiresSubscription) {
+        setShowSubscriptionModal(true);
       } else {
-        toast.error(error.response?.data?.message || 'Failed to send interest');
+      toast.error(error.response?.data?.message || 'Failed to send interest');
       }
     }
   };
 
   const handleFavorite = async () => {
+    if (!hasActiveSubscription) {
+      setShowSubscriptionModal(true);
+      return;
+    }
     try {
       if (isFavorite) {
         await removeFavorite(id);
@@ -50,7 +75,11 @@ const ProfileDetail = () => {
         toast.success('Added to favorites');
       }
     } catch (error) {
+      if (error.response?.data?.requiresSubscription) {
+        setShowSubscriptionModal(true);
+      } else {
       toast.error(error.response?.data?.message || 'Failed to update favorite');
+      }
     }
   };
 
@@ -191,6 +220,11 @@ const ProfileDetail = () => {
           )}
         </div>
       </div>
+
+      <SubscriptionRequiredModal
+        isOpen={showSubscriptionModal}
+        onClose={() => setShowSubscriptionModal(false)}
+      />
     </div>
   );
 };

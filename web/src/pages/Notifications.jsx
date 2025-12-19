@@ -1,21 +1,39 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from 'react-query';
 import { useNavigate } from 'react-router-dom';
+import { getCurrentSubscription } from '../services/subscriptionService';
 import { getNotifications, markAsRead, markAllAsRead, deleteNotification, deleteAllNotifications } from '../services/notificationService';
 import { getImageUrl } from '../config/api';
 import toast from 'react-hot-toast';
+import SubscriptionRequiredModal from '../components/SubscriptionRequiredModal';
 
 const Notifications = () => {
   const navigate = useNavigate();
   const [filter, setFilter] = useState('all'); // 'all' or 'unread'
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
 
+  const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
   const { data, refetch } = useQuery(
     ['notifications', filter],
     () => getNotifications({ unreadOnly: filter === 'unread' }),
     {
       refetchInterval: 5000, // Refresh every 5 seconds
+      retry: false,
+      onError: (error) => {
+        if (error.response?.status === 403 || error.response?.data?.requiresSubscription) {
+          setShowSubscriptionModal(true);
+        }
+      }
     }
   );
+
+  const hasActiveSubscription = subscriptionData?.hasActiveSubscription;
+
+  useEffect(() => {
+    if (subscriptionData && !hasActiveSubscription) {
+      setShowSubscriptionModal(true);
+    }
+  }, [subscriptionData, hasActiveSubscription]);
 
   const handleMarkAsRead = async (id) => {
     try {
@@ -184,6 +202,11 @@ const Notifications = () => {
           No notifications found
         </div>
       )}
+
+      <SubscriptionRequiredModal
+        isOpen={showSubscriptionModal}
+        onClose={() => setShowSubscriptionModal(false)}
+      />
     </div>
   );
 };

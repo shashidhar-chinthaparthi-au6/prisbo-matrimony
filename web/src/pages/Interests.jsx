@@ -1,20 +1,53 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from 'react-query';
 import { getSentInterests, getReceivedInterests, getMutualMatches, acceptInterest, rejectInterest } from '../services/interestService';
+import { getCurrentSubscription } from '../services/subscriptionService';
 import { getOrCreateChat } from '../services/chatService';
 import { getImageUrl } from '../config/api';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
+import SubscriptionRequiredModal from '../components/SubscriptionRequiredModal';
 
 const Interests = () => {
   const [activeTab, setActiveTab] = useState('received');
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const { data: sentData, refetch: refetchSent } = useQuery('sentInterests', getSentInterests);
-  const { data: receivedData, refetch: refetchReceived } = useQuery('receivedInterests', getReceivedInterests);
-  const { data: matchesData, refetch: refetchMatches } = useQuery('matches', getMutualMatches);
+  const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
+  const { data: sentData, refetch: refetchSent } = useQuery('sentInterests', getSentInterests, {
+    retry: false,
+    onError: (error) => {
+      if (error.response?.status === 403 || error.response?.data?.requiresSubscription) {
+        setShowSubscriptionModal(true);
+      }
+    }
+  });
+  const { data: receivedData, refetch: refetchReceived } = useQuery('receivedInterests', getReceivedInterests, {
+    retry: false,
+    onError: (error) => {
+      if (error.response?.status === 403 || error.response?.data?.requiresSubscription) {
+        setShowSubscriptionModal(true);
+      }
+    }
+  });
+  const { data: matchesData, refetch: refetchMatches } = useQuery('matches', getMutualMatches, {
+    retry: false,
+    onError: (error) => {
+      if (error.response?.status === 403 || error.response?.data?.requiresSubscription) {
+        setShowSubscriptionModal(true);
+      }
+    }
+  });
+
+  const hasActiveSubscription = subscriptionData?.hasActiveSubscription;
+
+  useEffect(() => {
+    if (subscriptionData && !hasActiveSubscription) {
+      setShowSubscriptionModal(true);
+    }
+  }, [subscriptionData, hasActiveSubscription]);
 
   const handleAccept = async (id) => {
     try {
@@ -197,6 +230,11 @@ const Interests = () => {
       <div className="space-y-4">
         {renderInterests()}
       </div>
+
+      <SubscriptionRequiredModal
+        isOpen={showSubscriptionModal}
+        onClose={() => setShowSubscriptionModal(false)}
+      />
     </div>
   );
 };

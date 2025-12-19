@@ -13,6 +13,7 @@ import Favorites from './pages/Favorites';
 import Chats from './pages/Chats';
 import Notifications from './pages/Notifications';
 import Admin from './pages/Admin';
+import Subscription from './pages/Subscription';
 
 const AppRoutes = () => {
   const { user } = useAuth();
@@ -45,67 +46,75 @@ const AppRoutes = () => {
   }
 
   return (
-    <Routes>
-      <Route path="/" element={<Home />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route
+            path="/search"
+            element={
+              <ProtectedRoute>
+                <Search />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <Profile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profiles/:id"
+            element={
+              <ProtectedRoute>
+                <ProfileDetail />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/interests"
+            element={
+              <ProtectedRoute>
+                <Interests />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/favorites"
+            element={
+              <ProtectedRoute>
+                <Favorites />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/chats"
+            element={
+              <ProtectedRoute>
+                <Chats />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/notifications"
+            element={
+              <ProtectedRoute>
+                <Notifications />
+              </ProtectedRoute>
+            }
+          />
       <Route
-        path="/search"
+        path="/subscription"
         element={
           <ProtectedRoute>
-            <Search />
+            <Subscription />
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/profile"
-        element={
-          <ProtectedRoute>
-            <Profile />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/profiles/:id"
-        element={
-          <ProtectedRoute>
-            <ProfileDetail />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/interests"
-        element={
-          <ProtectedRoute>
-            <Interests />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/favorites"
-        element={
-          <ProtectedRoute>
-            <Favorites />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/chats"
-        element={
-          <ProtectedRoute>
-            <Chats />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/notifications"
-        element={
-          <ProtectedRoute>
-            <Notifications />
-          </ProtectedRoute>
-        }
-      />
-    </Routes>
+        </Routes>
   );
 };
 

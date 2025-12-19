@@ -1,21 +1,31 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery } from 'react-query';
 import { useLocation } from 'react-router-dom';
+import { getCurrentSubscription } from '../services/subscriptionService';
 import { getChats, getMessages, sendMessage } from '../services/chatService';
 import { getImageUrl } from '../config/api';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
+import SubscriptionRequiredModal from '../components/SubscriptionRequiredModal';
 
 const Chats = () => {
   const location = useLocation();
   const { user } = useAuth();
   const [selectedChat, setSelectedChat] = useState(null);
   const [message, setMessage] = useState('');
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const messagesEndRef = useRef(null);
 
+  const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
   const { data: chatsData, refetch: refetchChats } = useQuery('chats', getChats, {
     refetchInterval: 5000, // Refresh every 5 seconds for notifications
+    retry: false,
+    onError: (error) => {
+      if (error.response?.status === 403 || error.response?.data?.requiresSubscription) {
+        setShowSubscriptionModal(true);
+      }
+    }
   });
   const { data: messagesData, refetch: refetchMessages } = useQuery(
     ['messages', selectedChat],
@@ -39,6 +49,14 @@ const Chats = () => {
       setSelectedChat(sortedChats[0]._id);
     }
   }, [location.state, chatsData, selectedChat]);
+
+  const hasActiveSubscription = subscriptionData?.hasActiveSubscription;
+
+  useEffect(() => {
+    if (subscriptionData && !hasActiveSubscription) {
+      setShowSubscriptionModal(true);
+    }
+  }, [subscriptionData, hasActiveSubscription]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -232,6 +250,11 @@ const Chats = () => {
           </div>
         )}
       </div>
+
+      <SubscriptionRequiredModal
+        isOpen={showSubscriptionModal}
+        onClose={() => setShowSubscriptionModal(false)}
+      />
     </div>
   );
 };

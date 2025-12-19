@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
 import { View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Image } from 'react-native';
+import { useQuery } from 'react-query';
+import { getCurrentSubscription } from '../services/subscriptionService';
 import { getChats, getMessages, sendMessage } from '../services/chatService';
 import { getImageUrl } from '../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import SubscriptionRequiredModal from '../components/SubscriptionRequiredModal';
 
 const ChatsScreen = ({ navigation, route }) => {
   const [chats, setChats] = useState([]);
@@ -11,9 +14,16 @@ const ChatsScreen = ({ navigation, route }) => {
   const [messageText, setMessageText] = useState('');
   const [loading, setLoading] = useState(false);
   const [userId, setUserId] = useState(null);
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+
+  const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
+  const hasActiveSubscription = subscriptionData?.hasActiveSubscription;
 
   useEffect(() => {
     loadUserId();
+    if (subscriptionData && !hasActiveSubscription) {
+      setShowSubscriptionModal(true);
+    } else if (hasActiveSubscription) {
     loadChats();
     if (route.params?.chatId) {
       setSelectedChat(route.params.chatId);
@@ -25,7 +35,8 @@ const ChatsScreen = ({ navigation, route }) => {
     }, 5000);
     
     return () => clearInterval(chatsInterval);
-  }, [route.params]);
+    }
+  }, [route.params, subscriptionData, hasActiveSubscription]);
 
   useEffect(() => {
     // Auto-select the latest chat when chats are loaded
@@ -61,12 +72,20 @@ const ChatsScreen = ({ navigation, route }) => {
   };
 
   const loadChats = async () => {
+    if (!hasActiveSubscription) {
+      setShowSubscriptionModal(true);
+      return;
+    }
     setLoading(true);
     try {
       const response = await getChats();
       setChats(response.chats || []);
     } catch (error) {
+      if (error.response?.status === 403 || error.response?.data?.requiresSubscription) {
+        setShowSubscriptionModal(true);
+      } else {
       alert(error.response?.data?.message || 'Failed to load chats');
+      }
     } finally {
       setLoading(false);
     }
@@ -268,6 +287,12 @@ const ChatsScreen = ({ navigation, route }) => {
           <Text style={styles.sendButtonText}>Send</Text>
         </TouchableOpacity>
       </View>
+
+      <SubscriptionRequiredModal
+        isOpen={showSubscriptionModal}
+        onClose={() => setShowSubscriptionModal(false)}
+        onSubscribe={() => navigation.navigate('Subscription')}
+      />
     </View>
   );
 };

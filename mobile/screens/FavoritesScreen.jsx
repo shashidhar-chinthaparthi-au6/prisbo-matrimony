@@ -1,27 +1,46 @@
 import { useState, useEffect } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Image } from 'react-native';
+import { useQuery } from 'react-query';
 import { getFavorites, removeFavorite } from '../services/favoriteService';
+import { getCurrentSubscription } from '../services/subscriptionService';
 import { getImageUrl } from '../config/api';
+import SubscriptionRequiredModal from '../components/SubscriptionRequiredModal';
 
 const FavoritesScreen = ({ navigation }) => {
   const [favorites, setFavorites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [count, setCount] = useState(0);
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+
+  const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
+  const hasActiveSubscription = subscriptionData?.hasActiveSubscription;
 
   useEffect(() => {
+    if (subscriptionData && !hasActiveSubscription) {
+      setShowSubscriptionModal(true);
+    } else if (hasActiveSubscription) {
     loadFavorites();
     const interval = setInterval(loadFavorites, 5000);
     return () => clearInterval(interval);
-  }, []);
+    }
+  }, [subscriptionData, hasActiveSubscription]);
 
   const loadFavorites = async () => {
+    if (!hasActiveSubscription) {
+      setShowSubscriptionModal(true);
+      return;
+    }
     setLoading(true);
     try {
       const response = await getFavorites();
       setFavorites(response.favorites || []);
       setCount(response.count || 0);
     } catch (error) {
+      if (error.response?.status === 403 || error.response?.data?.requiresSubscription) {
+        setShowSubscriptionModal(true);
+      } else {
       alert(error.response?.data?.message || 'Failed to load favorites');
+      }
     } finally {
       setLoading(false);
     }
@@ -105,6 +124,12 @@ const FavoritesScreen = ({ navigation }) => {
           contentContainerStyle={styles.listContent}
         />
       )}
+
+      <SubscriptionRequiredModal
+        isOpen={showSubscriptionModal}
+        onClose={() => setShowSubscriptionModal(false)}
+        onSubscribe={() => navigation.navigate('Subscription')}
+      />
     </View>
   );
 };

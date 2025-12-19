@@ -12,6 +12,8 @@ import favoriteRoutes from './routes/favoriteRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
+import subscriptionRoutes from './routes/subscriptionRoutes.js';
+import adminSubscriptionRoutes from './routes/adminSubscriptionRoutes.js';
 
 // Load env vars
 dotenv.config();
@@ -186,6 +188,8 @@ app.use('/api/favorites', favoriteRoutes);
 app.use('/api/chats', chatRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/subscriptions', subscriptionRoutes);
+app.use('/api/admin', adminSubscriptionRoutes);
 
 // Health check (works even if DB is not connected)
 app.get('/api/health', (req, res) => {

@@ -14,6 +14,7 @@ import NotificationsScreen from './screens/NotificationsScreen';
 import InterestsScreen from './screens/InterestsScreen';
 import FavoritesScreen from './screens/FavoritesScreen';
 import AdminScreen from './screens/AdminScreen';
+import SubscriptionScreen from './screens/SubscriptionScreen';
 import { ActivityIndicator, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useEffect, useState } from 'react';
 import { getNotifications } from './services/notificationService';
@@ -142,9 +143,9 @@ const MainTabs = () => {
           tabBarLabel: 'Chats',
           tabBarIcon: ({ color, size }) => (
             <Tooltip text="Chats">
-              <View style={{ position: 'relative' }}>
-                <Text style={{ fontSize: size, color }}>💬</Text>
-              </View>
+            <View style={{ position: 'relative' }}>
+              <Text style={{ fontSize: size, color }}>💬</Text>
+            </View>
             </Tooltip>
           ),
         }}
@@ -216,7 +217,7 @@ const AppNavigator = () => {
             />
           ) : (
             <>
-              <Stack.Screen name="Main" component={MainTabs} options={{ headerShown: false }} />
+          <Stack.Screen name="Main" component={MainTabs} options={{ headerShown: false }} />
               <Stack.Screen 
                 name="Profile" 
                 component={ProfileScreen}
@@ -231,6 +232,11 @@ const AppNavigator = () => {
                 name="Notifications" 
                 component={NotificationsScreen}
                 options={{ title: 'Notifications' }}
+              />
+              <Stack.Screen 
+                name="Subscription" 
+                component={SubscriptionScreen}
+                options={{ title: 'Subscription' }}
               />
             </>
           )}
@@ -291,9 +297,9 @@ const styles = StyleSheet.create({
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <AppNavigator />
-      </AuthProvider>
+    <AuthProvider>
+      <AppNavigator />
+    </AuthProvider>
     </QueryClientProvider>
   );
 }

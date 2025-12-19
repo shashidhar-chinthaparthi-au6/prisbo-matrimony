@@ -255,6 +255,12 @@ const ProfileScreen = ({ route, navigation }) => {
           <Text style={styles.info}>Education: {displayProfile.education?.highestEducation || 'N/A'}</Text>
           <Text style={styles.info}>Occupation: {displayProfile.career?.occupation || 'N/A'}</Text>
           <TouchableOpacity 
+            style={styles.subscriptionButton} 
+            onPress={() => navigation.navigate('Subscription')}
+          >
+            <Text style={styles.subscriptionButtonText}>💳 Subscription</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
             style={styles.logoutButton} 
             onPress={async () => {
               await logout();
@@ -356,12 +362,24 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: 10,
   },
+  subscriptionButton: {
+    backgroundColor: '#ef4444',
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 30,
+    marginBottom: 15,
+  },
+  subscriptionButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
   logoutButton: {
     backgroundColor: '#dc2626',
     padding: 15,
     borderRadius: 8,
     alignItems: 'center',
-    marginTop: 30,
     marginBottom: 20,
   },
   logoutButtonText: {

@@ -1,25 +1,44 @@
 import { useState, useEffect } from 'react';
 import { View, Text, ScrollView, Image, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { useQuery } from 'react-query';
-import { getProfileById } from '../services/profileService';
+import { getProfileById, getMyProfile } from '../services/profileService';
+import { getCurrentSubscription } from '../services/subscriptionService';
 import { sendInterest } from '../services/interestService';
 import { addFavorite, removeFavorite } from '../services/favoriteService';
 import { getOrCreateChat } from '../services/chatService';
 import { getImageUrl } from '../config/api';
 import Tooltip from '../components/Tooltip';
+import SubscriptionRequiredModal from '../components/SubscriptionRequiredModal';
 
 const ProfileDetailScreen = ({ route, navigation }) => {
   const { id } = route.params;
   const [isFavorite, setIsFavorite] = useState(false);
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
 
   const { data, isLoading, refetch } = useQuery(['profile', id], () => getProfileById(id));
+  const { data: myProfileData } = useQuery('myProfile', getMyProfile);
+  const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
+
+  const hasActiveSubscription = subscriptionData?.hasActiveSubscription;
+  const isMyProfile = myProfileData?.profile?.userId?._id === data?.profile?.userId?._id;
+
+  useEffect(() => {
+    // Check if subscription is required when profile loads
+    if (data?.profile && !isMyProfile && !hasActiveSubscription) {
+      setShowSubscriptionModal(true);
+    }
+  }, [data, isMyProfile, hasActiveSubscription]);
 
   const handleSendInterest = async () => {
+    if (!hasActiveSubscription) {
+      setShowSubscriptionModal(true);
+      return;
+    }
     try {
       const response = await sendInterest({ toUserId: data.profile.userId._id });
       if (response.success) {
-        alert('Interest sent successfully!');
-        refetch(); // Refetch to update interest status
+      alert('Interest sent successfully!');
+      refetch(); // Refetch to update interest status
       }
     } catch (error) {
       // Handle "Interest already exists" case
@@ -31,13 +50,19 @@ const ProfileDetailScreen = ({ route, navigation }) => {
         }
         alert('Interest already sent. Status: ' + interest.status);
         refetch(); // Refetch to update interest status
+      } else if (error.response?.data?.requiresSubscription) {
+        setShowSubscriptionModal(true);
       } else {
-        alert(error.response?.data?.message || 'Failed to send interest');
+      alert(error.response?.data?.message || 'Failed to send interest');
       }
     }
   };
 
   const handleFavorite = async () => {
+    if (!hasActiveSubscription) {
+      setShowSubscriptionModal(true);
+      return;
+    }
     try {
       if (isFavorite) {
         await removeFavorite(id);
@@ -49,7 +74,11 @@ const ProfileDetailScreen = ({ route, navigation }) => {
         alert('Added to favorites');
       }
     } catch (error) {
+      if (error.response?.data?.requiresSubscription) {
+        setShowSubscriptionModal(true);
+      } else {
       alert(error.response?.data?.message || 'Failed to update favorite');
+      }
     }
   };
 
@@ -81,6 +110,7 @@ const ProfileDetailScreen = ({ route, navigation }) => {
   const profile = data.profile;
 
   return (
+    <>
     <ScrollView style={styles.container}>
       <View style={styles.imageContainer}>
         {profile.photos?.map((photo, index) => (
@@ -100,20 +130,20 @@ const ProfileDetailScreen = ({ route, navigation }) => {
           </View>
           <View style={styles.actions}>
             <Tooltip text={isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}>
-              <TouchableOpacity
+            <TouchableOpacity
                 style={styles.iconButton}
-                onPress={handleFavorite}
-              >
+              onPress={handleFavorite}
+            >
                 <Text style={styles.iconText}>
                   {isFavorite ? '⭐' : '☆'}
                 </Text>
-              </TouchableOpacity>
+            </TouchableOpacity>
             </Tooltip>
             {profile.interestStatus === 'accepted' ? (
               <Tooltip text="Start Chat">
-                <TouchableOpacity style={styles.interestButton} onPress={handleChat}>
-                  <Text style={styles.interestButtonText}>Chat</Text>
-                </TouchableOpacity>
+              <TouchableOpacity style={styles.interestButton} onPress={handleChat}>
+                <Text style={styles.interestButtonText}>Chat</Text>
+              </TouchableOpacity>
               </Tooltip>
             ) : profile.interestStatus === 'pending' ? (
               <Tooltip text="Interest Already Sent">
@@ -123,9 +153,9 @@ const ProfileDetailScreen = ({ route, navigation }) => {
               </Tooltip>
             ) : (
               <Tooltip text="Send Interest">
-                <TouchableOpacity style={styles.interestButton} onPress={handleSendInterest}>
-                  <Text style={styles.interestButtonText}>Send Interest</Text>
-                </TouchableOpacity>
+              <TouchableOpacity style={styles.interestButton} onPress={handleSendInterest}>
+                <Text style={styles.interestButtonText}>Send Interest</Text>
+              </TouchableOpacity>
               </Tooltip>
             )}
           </View>
@@ -170,6 +200,13 @@ const ProfileDetailScreen = ({ route, navigation }) => {
         )}
       </View>
     </ScrollView>
+
+      <SubscriptionRequiredModal
+        isOpen={showSubscriptionModal}
+        onClose={() => setShowSubscriptionModal(false)}
+        onSubscribe={() => navigation.navigate('Subscription')}
+      />
+    </>
   );
 };
 

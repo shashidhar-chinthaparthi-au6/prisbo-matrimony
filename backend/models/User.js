@@ -41,6 +41,18 @@ const userSchema = new mongoose.Schema(
     lastChatSectionAccess: {
       type: Date,
     },
+    subscriptionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Subscription',
+    },
+    subscriptionStatus: {
+      type: String,
+      enum: ['active', 'expired', 'pending', 'none'],
+      default: 'none',
+    },
+    subscriptionExpiryDate: {
+      type: Date,
+    },
   },
   {
     timestamps: true,

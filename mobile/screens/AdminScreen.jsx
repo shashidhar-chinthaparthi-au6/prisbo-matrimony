@@ -1,6 +1,19 @@
 import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, FlatList, Alert } from 'react-native';
-import { getAllUsers, getAllProfiles, getStats, blockUser, updateProfileStatus } from '../services/adminService';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, FlatList, Alert, Linking } from 'react-native';
+import {
+  getAllUsers,
+  getAllProfiles,
+  getStats,
+  blockUser,
+  updateProfileStatus,
+  getAllSubscriptions,
+  getPendingSubscriptions,
+  approveSubscription,
+  rejectSubscription,
+  cancelSubscription,
+  reactivateSubscription,
+  getSubscriptionStats,
+} from '../services/adminService';
 
 const AdminScreen = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState('stats');
@@ -8,6 +21,9 @@ const AdminScreen = ({ navigation }) => {
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
   const [profiles, setProfiles] = useState([]);
+  const [subscriptions, setSubscriptions] = useState([]);
+  const [pendingSubscriptions, setPendingSubscriptions] = useState([]);
+  const [subscriptionStats, setSubscriptionStats] = useState(null);
   const [page, setPage] = useState(1);
 
   useEffect(() => {
@@ -17,6 +33,10 @@ const AdminScreen = ({ navigation }) => {
       loadUsers();
     } else if (activeTab === 'profiles') {
       loadProfiles();
+    } else if (activeTab === 'subscriptions') {
+      loadSubscriptions();
+      loadPendingSubscriptions();
+      loadSubscriptionStats();
     }
   }, [activeTab, page]);
 
@@ -74,6 +94,121 @@ const AdminScreen = ({ navigation }) => {
     } catch (error) {
       Alert.alert('Error', error.response?.data?.message || 'Failed to update profile');
     }
+  };
+
+  const loadSubscriptions = async () => {
+    setLoading(true);
+    try {
+      const response = await getAllSubscriptions({ page, limit: 20 });
+      setSubscriptions(response.subscriptions || []);
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.message || 'Failed to load subscriptions');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadPendingSubscriptions = async () => {
+    try {
+      const response = await getPendingSubscriptions();
+      setPendingSubscriptions(response.subscriptions || []);
+    } catch (error) {
+      // Silently fail
+    }
+  };
+
+  const loadSubscriptionStats = async () => {
+    try {
+      const response = await getSubscriptionStats();
+      setSubscriptionStats(response.stats);
+    } catch (error) {
+      // Silently fail
+    }
+  };
+
+  const handleApproveSubscription = async (id, cashReceivedDate, cashReceivedBy) => {
+    try {
+      await approveSubscription(id, { cashReceivedDate, cashReceivedBy });
+      Alert.alert('Success', 'Subscription approved successfully');
+      loadSubscriptions();
+      loadPendingSubscriptions();
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.message || 'Failed to approve subscription');
+    }
+  };
+
+  const handleRejectSubscription = async (id) => {
+    Alert.prompt(
+      'Reject Subscription',
+      'Enter rejection reason:',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reject',
+          onPress: async (reason) => {
+            if (reason) {
+              try {
+                await rejectSubscription(id, { rejectionReason: reason });
+                Alert.alert('Success', 'Subscription rejected');
+                loadSubscriptions();
+                loadPendingSubscriptions();
+              } catch (error) {
+                Alert.alert('Error', error.response?.data?.message || 'Failed to reject subscription');
+              }
+            }
+          },
+        },
+      ],
+      'plain-text'
+    );
+  };
+
+  const handleCancelSubscription = async (id) => {
+    Alert.alert(
+      'Cancel Subscription',
+      'Are you sure you want to cancel this subscription?',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes',
+          onPress: async () => {
+            try {
+              await cancelSubscription(id);
+              Alert.alert('Success', 'Subscription cancelled successfully');
+              loadSubscriptions();
+              loadPendingSubscriptions();
+              loadSubscriptionStats();
+            } catch (error) {
+              Alert.alert('Error', error.response?.data?.message || 'Failed to cancel subscription');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleReactivateSubscription = async (id) => {
+    Alert.alert(
+      'Reactivate Subscription',
+      'Are you sure you want to reactivate this subscription?',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes',
+          onPress: async () => {
+            try {
+              await reactivateSubscription(id);
+              Alert.alert('Success', 'Subscription reactivated successfully');
+              loadSubscriptions();
+              loadPendingSubscriptions();
+              loadSubscriptionStats();
+            } catch (error) {
+              Alert.alert('Error', error.response?.data?.message || 'Failed to reactivate subscription');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const renderStats = () => (
@@ -180,6 +315,21 @@ const AdminScreen = ({ navigation }) => {
             Profiles
           </Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'subscriptions' && styles.activeTab]}
+          onPress={() => setActiveTab('subscriptions')}
+        >
+          <View style={{ position: 'relative' }}>
+            <Text style={[styles.tabText, activeTab === 'subscriptions' && styles.activeTabText]}>
+              Subscriptions
+            </Text>
+            {pendingSubscriptions.length > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{pendingSubscriptions.length}</Text>
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
       </View>
 
       {loading ? (
@@ -208,6 +358,157 @@ const AdminScreen = ({ navigation }) => {
               keyExtractor={(item) => item._id}
               ListEmptyComponent={<Text style={styles.emptyText}>No profiles found</Text>}
             />
+          )}
+          {activeTab === 'subscriptions' && (
+            <ScrollView style={styles.content}>
+              {/* Subscription Stats */}
+              {subscriptionStats && (
+                <View style={styles.statsContainer}>
+                  <View style={styles.statCard}>
+                    <Text style={styles.statValue}>{subscriptionStats.activeSubscriptions || 0}</Text>
+                    <Text style={styles.statLabel}>Active</Text>
+                  </View>
+                  <View style={styles.statCard}>
+                    <Text style={styles.statValue}>{subscriptionStats.pendingSubscriptions || 0}</Text>
+                    <Text style={styles.statLabel}>Pending</Text>
+                  </View>
+                  <View style={styles.statCard}>
+                    <Text style={styles.statValue}>₹{subscriptionStats.totalRevenue || 0}</Text>
+                    <Text style={styles.statLabel}>Revenue</Text>
+                  </View>
+                  <View style={styles.statCard}>
+                    <Text style={styles.statValue}>{subscriptionStats.expiringSubscriptions || 0}</Text>
+                    <Text style={styles.statLabel}>Expiring</Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Pending Subscriptions */}
+              {pendingSubscriptions.length > 0 && (
+                <View style={styles.pendingSection}>
+                  <Text style={styles.sectionTitle}>
+                    Pending Approvals ({pendingSubscriptions.length})
+                  </Text>
+                  {pendingSubscriptions.map((sub) => (
+                    <View key={sub._id} style={styles.pendingCard}>
+                      <View style={styles.pendingInfo}>
+                        <Text style={styles.pendingUser}>{sub.userId?.email}</Text>
+                        <Text style={styles.pendingPlan}>{sub.planName}</Text>
+                        <Text style={styles.pendingDetails}>
+                          {sub.paymentMethod} | ₹{sub.amount}
+                        </Text>
+                        {sub.upiScreenshot && (
+                          <TouchableOpacity
+                            onPress={() => Linking.openURL(sub.upiScreenshot)}
+                            style={styles.linkButton}
+                          >
+                            <Text style={styles.linkText}>View Payment Screenshot</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                      <View style={styles.pendingActions}>
+                        <TouchableOpacity
+                          style={[styles.actionButton, styles.approveButton]}
+                          onPress={() =>
+                            handleApproveSubscription(
+                              sub._id,
+                              sub.paymentMethod === 'cash' || sub.paymentMethod === 'mixed'
+                                ? new Date().toISOString()
+                                : undefined,
+                              sub.paymentMethod === 'cash' || sub.paymentMethod === 'mixed'
+                                ? 'Admin'
+                                : undefined
+                            )
+                          }
+                        >
+                          <Text style={styles.actionButtonText}>Approve</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.actionButton, styles.rejectButton]}
+                          onPress={() => handleRejectSubscription(sub._id)}
+                        >
+                          <Text style={styles.actionButtonText}>Reject</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {/* All Subscriptions */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>All Subscriptions</Text>
+                {subscriptions.length === 0 ? (
+                  <Text style={styles.emptyText}>No subscriptions found</Text>
+                ) : (
+                  subscriptions.map((sub) => (
+                    <View key={sub._id} style={styles.itemCard}>
+                      <View style={styles.itemInfo}>
+                        <Text style={styles.itemTitle}>{sub.userId?.email}</Text>
+                        <Text style={styles.itemSubtitle}>{sub.planName}</Text>
+                        <Text style={styles.itemSubtitle}>
+                          {sub.paymentMethod} | ₹{sub.amount}
+                        </Text>
+                        <Text style={styles.itemSubtitle}>
+                          Status: {sub.status} | Expires:{' '}
+                          {sub.endDate ? new Date(sub.endDate).toLocaleDateString() : '-'}
+                        </Text>
+                        {sub.upiScreenshot && (
+                          <TouchableOpacity
+                            onPress={() => Linking.openURL(sub.upiScreenshot)}
+                            style={styles.linkButton}
+                          >
+                            <Text style={styles.linkText}>View Proof</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                      {sub.status === 'pending' && (
+                        <View style={styles.subscriptionActions}>
+                          <TouchableOpacity
+                            style={[styles.actionButton, styles.approveButton]}
+                            onPress={() =>
+                              handleApproveSubscription(
+                                sub._id,
+                                sub.paymentMethod === 'cash' || sub.paymentMethod === 'mixed'
+                                  ? new Date().toISOString()
+                                  : undefined,
+                                sub.paymentMethod === 'cash' || sub.paymentMethod === 'mixed'
+                                  ? 'Admin'
+                                  : undefined
+                              )
+                            }
+                          >
+                            <Text style={styles.actionButtonText}>Approve</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.actionButton, styles.rejectButton]}
+                            onPress={() => handleRejectSubscription(sub._id)}
+                          >
+                            <Text style={styles.actionButtonText}>Reject</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                      {sub.status === 'approved' && (
+                        <TouchableOpacity
+                          style={[styles.actionButton, { backgroundColor: '#f97316' }]}
+                          onPress={() => handleCancelSubscription(sub._id)}
+                        >
+                          <Text style={styles.actionButtonText}>Cancel</Text>
+                        </TouchableOpacity>
+                      )}
+                      {(sub.status === 'cancelled' || sub.status === 'expired') && (
+                        <TouchableOpacity
+                          style={[styles.actionButton, styles.approveButton]}
+                          onPress={() => handleReactivateSubscription(sub._id)}
+                        >
+                          <Text style={styles.actionButtonText}>Reactivate</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  ))
+                )}
+              </View>
+            </ScrollView>
           )}
         </>
       )}
@@ -314,6 +615,82 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 50,
     color: '#666',
+  },
+  badge: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#ef4444',
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  pendingSection: {
+    marginBottom: 20,
+    padding: 15,
+    backgroundColor: '#fef3c7',
+    borderRadius: 8,
+  },
+  section: {
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 15,
+  },
+  pendingCard: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 15,
+    marginBottom: 10,
+  },
+  pendingInfo: {
+    marginBottom: 10,
+  },
+  pendingUser: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 5,
+  },
+  pendingPlan: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 5,
+  },
+  pendingDetails: {
+    fontSize: 12,
+    color: '#666',
+  },
+  pendingActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  subscriptionActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 10,
+  },
+  approveButton: {
+    backgroundColor: '#16a34a',
+  },
+  rejectButton: {
+    backgroundColor: '#dc2626',
+  },
+  linkButton: {
+    marginTop: 5,
+  },
+  linkText: {
+    color: '#2563eb',
+    fontSize: 12,
+    textDecorationLine: 'underline',
   },
 });
 

@@ -3,10 +3,12 @@ import { useQuery } from 'react-query';
 import { useNavigate } from 'react-router-dom';
 import { searchProfiles } from '../services/searchService';
 import { getMyProfile } from '../services/profileService';
+import { getCurrentSubscription } from '../services/subscriptionService';
 import { getOrCreateChat } from '../services/chatService';
 import { getImageUrl } from '../config/api';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import SubscriptionRequiredModal from '../components/SubscriptionRequiredModal';
 
 const Search = () => {
   const navigate = useNavigate();
@@ -22,20 +24,50 @@ const Search = () => {
     page: 1,
   });
   const [showFilters, setShowFilters] = useState(false);
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
 
   const { data: profileData } = useQuery('myProfile', getMyProfile);
+  const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
   const { data, isLoading, refetch, error } = useQuery(
     ['search', filters],
     () => searchProfiles(filters),
-    { enabled: false }
+    { 
+      enabled: false,
+      retry: false,
+      onError: (error) => {
+        if (error.response?.status === 403 || error.response?.data?.requiresSubscription) {
+          setShowSubscriptionModal(true);
+        }
+      }
+    }
   );
 
+  const hasActiveSubscription = subscriptionData?.hasActiveSubscription;
+
   useEffect(() => {
-    refetch();
-  }, [filters.page]);
+    // Only refetch if user has active subscription
+    if (hasActiveSubscription) {
+      refetch();
+    } else if (subscriptionData && !hasActiveSubscription) {
+      // Show modal if subscription data is loaded and user doesn't have active subscription
+      setShowSubscriptionModal(true);
+    }
+  }, [filters.page, hasActiveSubscription, subscriptionData]);
 
   const handleSearch = () => {
+    if (!hasActiveSubscription) {
+      setShowSubscriptionModal(true);
+      return;
+    }
     refetch();
+  };
+
+  const handleViewProfile = (profileId) => {
+    if (!hasActiveSubscription) {
+      setShowSubscriptionModal(true);
+      return;
+    }
+    navigate(`/profiles/${profileId}`);
   };
 
   const handleFilterChange = (key, value) => {
@@ -189,7 +221,22 @@ const Search = () => {
         </div>
       )}
 
-      {isLoading ? (
+      {!hasActiveSubscription && subscriptionData ? (
+        <div className="text-center py-12">
+          <div className="bg-white rounded-lg shadow p-8 max-w-md mx-auto">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Subscription Required</h2>
+            <p className="text-gray-600 mb-6">
+              You need an active subscription to search and view profiles. Please subscribe to continue.
+            </p>
+            <button
+              onClick={() => navigate('/subscription')}
+              className="inline-block px-6 py-3 bg-red-600 text-white rounded-md hover:bg-red-700 font-medium"
+            >
+              Subscribe Now
+            </button>
+          </div>
+        </div>
+      ) : isLoading ? (
         <div className="text-center py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
         </div>
@@ -219,12 +266,12 @@ const Search = () => {
                     {profile.personalInfo?.age} years, {profile.location?.city}
                   </p>
                   <div className="mt-4 flex space-x-2">
-                    <Link
-                      to={`/profiles/${profile._id}`}
+                    <button
+                      onClick={() => handleViewProfile(profile._id)}
                       className="text-primary-600 hover:text-primary-700 text-sm font-medium"
                     >
                       View Profile →
-                    </Link>
+                    </button>
                     {profile.interestStatus === 'accepted' && (
                       <button
                         onClick={() => handleChat(profile.userId._id)}
@@ -277,6 +324,11 @@ const Search = () => {
           No profiles found. Try adjusting your filters.
         </div>
       )}
+
+      <SubscriptionRequiredModal
+        isOpen={showSubscriptionModal}
+        onClose={() => setShowSubscriptionModal(false)}
+      />
     </div>
   );
 };
