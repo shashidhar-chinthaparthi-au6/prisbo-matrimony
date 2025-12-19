@@ -13,6 +13,7 @@ import ChatsScreen from './screens/ChatsScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
 import InterestsScreen from './screens/InterestsScreen';
 import FavoritesScreen from './screens/FavoritesScreen';
+import AdminScreen from './screens/AdminScreen';
 import { ActivityIndicator, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useEffect, useState } from 'react';
 import { getNotifications } from './services/notificationService';
@@ -198,26 +199,41 @@ const AppNavigator = () => {
     );
   }
 
+  // Debug: Log user role to help diagnose issues
+  if (user) {
+    console.log('User role:', user.role, 'User object:', JSON.stringify(user));
+  }
+
   return (
-    <NavigationContainer>
+    <NavigationContainer key={user ? (user.role === 'admin' ? 'admin' : 'user') : 'auth'}>
       {user ? (
         <Stack.Navigator>
-          <Stack.Screen name="Main" component={MainTabs} options={{ headerShown: false }} />
-          <Stack.Screen 
-            name="Profile" 
-            component={ProfileScreen}
-            options={{ title: 'My Profile' }}
-          />
-          <Stack.Screen 
-            name="ProfileDetail" 
-            component={ProfileDetailScreen}
-            options={{ title: 'Profile Details' }}
-          />
-          <Stack.Screen 
-            name="Notifications" 
-            component={NotificationsScreen}
-            options={{ title: 'Notifications' }}
-          />
+          {user.role === 'admin' ? (
+            <Stack.Screen 
+              name="Admin" 
+              component={AdminScreen}
+              options={{ title: 'Admin Dashboard' }}
+            />
+          ) : (
+            <>
+              <Stack.Screen name="Main" component={MainTabs} options={{ headerShown: false }} />
+              <Stack.Screen 
+                name="Profile" 
+                component={ProfileScreen}
+                options={{ title: 'My Profile' }}
+              />
+              <Stack.Screen 
+                name="ProfileDetail" 
+                component={ProfileDetailScreen}
+                options={{ title: 'Profile Details' }}
+              />
+              <Stack.Screen 
+                name="Notifications" 
+                component={NotificationsScreen}
+                options={{ title: 'Notifications' }}
+              />
+            </>
+          )}
         </Stack.Navigator>
       ) : (
         <AuthStack />

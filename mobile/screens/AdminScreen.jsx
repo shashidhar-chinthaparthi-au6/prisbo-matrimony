@@ -1,0 +1,321 @@
+import { useState, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, FlatList, Alert } from 'react-native';
+import { getAllUsers, getAllProfiles, getStats, blockUser, updateProfileStatus } from '../services/adminService';
+
+const AdminScreen = ({ navigation }) => {
+  const [activeTab, setActiveTab] = useState('stats');
+  const [loading, setLoading] = useState(false);
+  const [stats, setStats] = useState(null);
+  const [users, setUsers] = useState([]);
+  const [profiles, setProfiles] = useState([]);
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    if (activeTab === 'stats') {
+      loadStats();
+    } else if (activeTab === 'users') {
+      loadUsers();
+    } else if (activeTab === 'profiles') {
+      loadProfiles();
+    }
+  }, [activeTab, page]);
+
+  const loadStats = async () => {
+    setLoading(true);
+    try {
+      const response = await getStats();
+      setStats(response.stats);
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.message || 'Failed to load statistics');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadUsers = async () => {
+    setLoading(true);
+    try {
+      const response = await getAllUsers({ page, limit: 20 });
+      setUsers(response.users || []);
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.message || 'Failed to load users');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadProfiles = async () => {
+    setLoading(true);
+    try {
+      const response = await getAllProfiles({ page, limit: 20 });
+      setProfiles(response.profiles || []);
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.message || 'Failed to load profiles');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBlockUser = async (userId, isActive) => {
+    try {
+      await blockUser(userId, { isActive: !isActive });
+      Alert.alert('Success', `User ${!isActive ? 'unblocked' : 'blocked'} successfully`);
+      loadUsers();
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.message || 'Failed to update user');
+    }
+  };
+
+  const handleUpdateProfileStatus = async (profileId, isActive) => {
+    try {
+      await updateProfileStatus(profileId, { isActive: !isActive });
+      Alert.alert('Success', `Profile ${!isActive ? 'activated' : 'deactivated'} successfully`);
+      loadProfiles();
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.message || 'Failed to update profile');
+    }
+  };
+
+  const renderStats = () => (
+    <View style={styles.statsContainer}>
+      <View style={styles.statCard}>
+        <Text style={styles.statValue}>{stats?.totalUsers || 0}</Text>
+        <Text style={styles.statLabel}>Total Users</Text>
+      </View>
+      <View style={styles.statCard}>
+        <Text style={styles.statValue}>{stats?.totalProfiles || 0}</Text>
+        <Text style={styles.statLabel}>Total Profiles</Text>
+      </View>
+      <View style={styles.statCard}>
+        <Text style={styles.statValue}>{stats?.activeProfiles || 0}</Text>
+        <Text style={styles.statLabel}>Active Profiles</Text>
+      </View>
+      <View style={styles.statCard}>
+        <Text style={styles.statValue}>{stats?.brideProfiles || 0}</Text>
+        <Text style={styles.statLabel}>Bride Profiles</Text>
+      </View>
+      <View style={styles.statCard}>
+        <Text style={styles.statValue}>{stats?.groomProfiles || 0}</Text>
+        <Text style={styles.statLabel}>Groom Profiles</Text>
+      </View>
+      <View style={styles.statCard}>
+        <Text style={styles.statValue}>{stats?.totalInterests || 0}</Text>
+        <Text style={styles.statLabel}>Total Interests</Text>
+      </View>
+      <View style={styles.statCard}>
+        <Text style={styles.statValue}>{stats?.acceptedInterests || 0}</Text>
+        <Text style={styles.statLabel}>Accepted Interests</Text>
+      </View>
+    </View>
+  );
+
+  const renderUser = ({ item }) => (
+    <View style={styles.itemCard}>
+      <View style={styles.itemInfo}>
+        <Text style={styles.itemTitle}>{item.email}</Text>
+        <Text style={styles.itemSubtitle}>Phone: {item.phone}</Text>
+        <Text style={styles.itemSubtitle}>Role: {item.role}</Text>
+        <Text style={styles.itemSubtitle}>
+          Status: {item.isActive ? 'Active' : 'Blocked'}
+        </Text>
+      </View>
+      <TouchableOpacity
+        style={[styles.actionButton, item.isActive ? styles.blockButton : styles.unblockButton]}
+        onPress={() => handleBlockUser(item._id, item.isActive)}
+      >
+        <Text style={styles.actionButtonText}>
+          {item.isActive ? 'Block' : 'Unblock'}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  const renderProfile = ({ item }) => (
+    <View style={styles.itemCard}>
+      <View style={styles.itemInfo}>
+        <Text style={styles.itemTitle}>
+          {item.personalInfo?.firstName} {item.personalInfo?.lastName}
+        </Text>
+        <Text style={styles.itemSubtitle}>Type: {item.type}</Text>
+        <Text style={styles.itemSubtitle}>Age: {item.personalInfo?.age}</Text>
+        <Text style={styles.itemSubtitle}>
+          Status: {item.isActive ? 'Active' : 'Inactive'}
+        </Text>
+      </View>
+      <TouchableOpacity
+        style={[styles.actionButton, item.isActive ? styles.blockButton : styles.unblockButton]}
+        onPress={() => handleUpdateProfileStatus(item._id, item.isActive)}
+      >
+        <Text style={styles.actionButtonText}>
+          {item.isActive ? 'Deactivate' : 'Activate'}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'stats' && styles.activeTab]}
+          onPress={() => setActiveTab('stats')}
+        >
+          <Text style={[styles.tabText, activeTab === 'stats' && styles.activeTabText]}>
+            Stats
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'users' && styles.activeTab]}
+          onPress={() => setActiveTab('users')}
+        >
+          <Text style={[styles.tabText, activeTab === 'users' && styles.activeTabText]}>
+            Users
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'profiles' && styles.activeTab]}
+          onPress={() => setActiveTab('profiles')}
+        >
+          <Text style={[styles.tabText, activeTab === 'profiles' && styles.activeTabText]}>
+            Profiles
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {loading ? (
+        <ActivityIndicator size="large" style={styles.loader} />
+      ) : (
+        <>
+          {activeTab === 'stats' && stats && (
+            <ScrollView style={styles.content}>
+              {renderStats()}
+            </ScrollView>
+          )}
+          {activeTab === 'users' && (
+            <FlatList
+              style={styles.content}
+              data={users}
+              renderItem={renderUser}
+              keyExtractor={(item) => item._id}
+              ListEmptyComponent={<Text style={styles.emptyText}>No users found</Text>}
+            />
+          )}
+          {activeTab === 'profiles' && (
+            <FlatList
+              style={styles.content}
+              data={profiles}
+              renderItem={renderProfile}
+              keyExtractor={(item) => item._id}
+              ListEmptyComponent={<Text style={styles.emptyText}>No profiles found</Text>}
+            />
+          )}
+        </>
+      )}
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  tab: {
+    flex: 1,
+    padding: 15,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  activeTab: {
+    borderBottomColor: '#ef4444',
+  },
+  tabText: {
+    fontSize: 16,
+    color: '#666',
+  },
+  activeTabText: {
+    color: '#ef4444',
+    fontWeight: 'bold',
+  },
+  content: {
+    flex: 1,
+  },
+  loader: {
+    marginTop: 50,
+  },
+  statsContainer: {
+    padding: 15,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  statCard: {
+    width: '48%',
+    backgroundColor: '#f9f9f9',
+    padding: 20,
+    borderRadius: 8,
+    marginBottom: 15,
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#ef4444',
+    marginBottom: 5,
+  },
+  statLabel: {
+    fontSize: 14,
+    color: '#666',
+  },
+  itemCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  itemInfo: {
+    flex: 1,
+  },
+  itemTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 5,
+  },
+  itemSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 2,
+  },
+  actionButton: {
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  blockButton: {
+    backgroundColor: '#dc2626',
+  },
+  unblockButton: {
+    backgroundColor: '#16a34a',
+  },
+  actionButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 12,
+  },
+  emptyText: {
+    textAlign: 'center',
+    marginTop: 50,
+    color: '#666',
+  },
+});
+
+export default AdminScreen;
+

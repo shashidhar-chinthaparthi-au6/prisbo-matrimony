@@ -18,14 +18,19 @@ const Layout = ({ children }) => {
 
   const unreadCount = notificationsData?.unreadCount || 0;
 
-  const navItems = [
-    { path: '/', label: 'Home', icon: '🏠' },
-    { path: '/search', label: 'Search', icon: '🔍' },
-    { path: '/interests', label: 'Interests', icon: '💝' },
-    { path: '/favorites', label: 'Favorites', icon: '⭐' },
-    { path: '/chats', label: 'Chats', icon: '💬' },
-    { path: '/profile', label: 'Profile', icon: '👤' },
-  ];
+  const navItems = user?.role === 'admin' 
+    ? [
+        { path: '/', label: 'Home', icon: '🏠' },
+        { path: '/admin', label: 'Admin', icon: '⚙️' },
+      ]
+    : [
+        { path: '/', label: 'Home', icon: '🏠' },
+        { path: '/search', label: 'Search', icon: '🔍' },
+        { path: '/interests', label: 'Interests', icon: '💝' },
+        { path: '/favorites', label: 'Favorites', icon: '⭐' },
+        { path: '/chats', label: 'Chats', icon: '💬' },
+        { path: '/profile', label: 'Profile', icon: '👤' },
+      ];
 
   return (
     <div className="min-h-screen bg-gray-50">

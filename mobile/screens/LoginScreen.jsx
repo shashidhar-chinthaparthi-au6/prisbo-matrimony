@@ -21,9 +21,13 @@ const LoginScreen = ({ navigation }) => {
         : { phone: formData.phone, password: formData.password };
 
       const response = await login(data);
+      console.log('Login response:', JSON.stringify(response));
+      console.log('User role from login:', response.user?.role);
       await setAuth(response.user, response.token);
-      navigation.replace('Main');
+      // Navigation will be handled by AppNavigator based on user role
+      // No need to navigate manually - the AppNavigator will show the correct screen
     } catch (error) {
+      console.error('Login error:', error);
       alert(error.response?.data?.message || 'Login failed');
     } finally {
       setLoading(false);
