@@ -86,3 +86,39 @@ export const deletePlan = async (id) => {
   return response.data;
 };
 
+// Profile Verification
+export const getPendingProfiles = async (params) => {
+  const response = await api.get('/admin/profiles/pending', { params });
+  return response.data;
+};
+
+export const getProfileById = async (id) => {
+  const response = await api.get(`/admin/profiles/${id}`);
+  return response.data;
+};
+
+export const approveProfile = async (id) => {
+  const response = await api.put(`/admin/profiles/${id}/approve`);
+  return response.data;
+};
+
+export const rejectProfile = async (id, rejectionReason) => {
+  const response = await api.put(`/admin/profiles/${id}/reject`, { rejectionReason });
+  return response.data;
+};
+
+export const updateProfileField = async (id, field, value, section) => {
+  const response = await api.put(`/admin/profiles/${id}/update`, { field, value, section });
+  return response.data;
+};
+
+export const deleteProfilePhoto = async (profileId, photoId) => {
+  const response = await api.delete(`/admin/profiles/${profileId}/photos/${photoId}`);
+  return response.data;
+};
+
+export const getVerificationStats = async () => {
+  const response = await api.get('/admin/profiles/verification-stats');
+  return response.data;
+};
+

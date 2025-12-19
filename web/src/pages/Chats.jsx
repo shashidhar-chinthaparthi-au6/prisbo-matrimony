@@ -3,11 +3,14 @@ import { useQuery } from 'react-query';
 import { useLocation } from 'react-router-dom';
 import { getCurrentSubscription } from '../services/subscriptionService';
 import { getChats, getMessages, sendMessage } from '../services/chatService';
+import { getMyProfile } from '../services/profileService';
 import { getImageUrl } from '../config/api';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import SubscriptionRequiredModal from '../components/SubscriptionRequiredModal';
+import ProfileIncompleteModal from '../components/ProfileIncompleteModal';
+import { isProfileComplete } from '../utils/profileUtils';
 
 const Chats = () => {
   const location = useLocation();
@@ -15,9 +18,11 @@ const Chats = () => {
   const [selectedChat, setSelectedChat] = useState(null);
   const [message, setMessage] = useState('');
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [showProfileIncompleteModal, setShowProfileIncompleteModal] = useState(false);
   const messagesEndRef = useRef(null);
 
   const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
+  const { data: profileData } = useQuery('myProfile', getMyProfile);
   const { data: chatsData, refetch: refetchChats } = useQuery('chats', getChats, {
     refetchInterval: 5000, // Refresh every 5 seconds for notifications
     retry: false,
@@ -53,11 +58,20 @@ const Chats = () => {
   const hasActiveSubscription = subscriptionData?.hasActiveSubscription;
 
   useEffect(() => {
-    // Always show modal if user doesn't have active subscription
+    // Show subscription modal if user doesn't have active subscription
     if (subscriptionData && !hasActiveSubscription) {
       setShowSubscriptionModal(true);
+      setShowProfileIncompleteModal(false);
+    } else if (hasActiveSubscription && subscriptionData) {
+      // Check if profile exists and is complete
+      if (!profileData?.profile || !isProfileComplete(profileData.profile)) {
+        setShowProfileIncompleteModal(true);
+        setShowSubscriptionModal(false);
+      } else {
+        setShowProfileIncompleteModal(false);
+      }
     }
-  }, [subscriptionData, hasActiveSubscription]);
+  }, [subscriptionData, hasActiveSubscription, profileData]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -254,6 +268,9 @@ const Chats = () => {
 
       <SubscriptionRequiredModal
         isOpen={showSubscriptionModal}
+      />
+      <ProfileIncompleteModal
+        isOpen={showProfileIncompleteModal}
       />
     </div>
   );

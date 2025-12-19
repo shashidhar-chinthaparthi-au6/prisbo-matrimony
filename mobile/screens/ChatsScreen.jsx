@@ -2,10 +2,13 @@ import { useState, useEffect } from 'react';
 import { View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Image } from 'react-native';
 import { useQuery } from 'react-query';
 import { getCurrentSubscription } from '../services/subscriptionService';
+import { getMyProfile } from '../services/profileService';
 import { getChats, getMessages, sendMessage } from '../services/chatService';
 import { getImageUrl } from '../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import SubscriptionRequiredModal from '../components/SubscriptionRequiredModal';
+import ProfileIncompleteModal from '../components/ProfileIncompleteModal';
+import { isProfileComplete } from '../utils/profileUtils';
 
 const ChatsScreen = ({ navigation, route }) => {
   const [chats, setChats] = useState([]);
@@ -15,29 +18,39 @@ const ChatsScreen = ({ navigation, route }) => {
   const [loading, setLoading] = useState(false);
   const [userId, setUserId] = useState(null);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [showProfileIncompleteModal, setShowProfileIncompleteModal] = useState(false);
 
   const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
+  const { data: profileData } = useQuery('myProfile', getMyProfile);
   const hasActiveSubscription = subscriptionData?.hasActiveSubscription;
 
   useEffect(() => {
     loadUserId();
-    // Always show modal if user doesn't have active subscription
+    // Show subscription modal if user doesn't have active subscription
     if (subscriptionData && !hasActiveSubscription) {
       setShowSubscriptionModal(true);
-    } else if (hasActiveSubscription) {
-      loadChats();
-      if (route.params?.chatId) {
-        setSelectedChat(route.params.chatId);
-      }
-      
-      // Auto-refresh chats every 5 seconds
-      const chatsInterval = setInterval(() => {
+      setShowProfileIncompleteModal(false);
+    } else if (hasActiveSubscription && subscriptionData) {
+      // Check if profile exists and is complete
+      if (!profileData?.profile || !isProfileComplete(profileData.profile)) {
+        setShowProfileIncompleteModal(true);
+        setShowSubscriptionModal(false);
+      } else {
+        setShowProfileIncompleteModal(false);
         loadChats();
-      }, 5000);
-      
-      return () => clearInterval(chatsInterval);
+        if (route.params?.chatId) {
+          setSelectedChat(route.params.chatId);
+        }
+        
+        // Auto-refresh chats every 5 seconds
+        const chatsInterval = setInterval(() => {
+          loadChats();
+        }, 5000);
+        
+        return () => clearInterval(chatsInterval);
+      }
     }
-  }, [route.params, subscriptionData, hasActiveSubscription]);
+  }, [route.params, subscriptionData, hasActiveSubscription, profileData]);
 
   useEffect(() => {
     // Auto-select the latest chat when chats are loaded
@@ -292,6 +305,10 @@ const ChatsScreen = ({ navigation, route }) => {
       <SubscriptionRequiredModal
         isOpen={showSubscriptionModal}
         onSubscribe={() => navigation.navigate('Subscription')}
+      />
+      <ProfileIncompleteModal
+        isOpen={showProfileIncompleteModal}
+        onCompleteProfile={() => navigation.navigate('Profile', { edit: true })}
       />
     </View>
   );

@@ -2,6 +2,7 @@ import Subscription from '../models/Subscription.js';
 import SubscriptionPlan from '../models/SubscriptionPlan.js';
 import User from '../models/User.js';
 import Invoice from '../models/Invoice.js';
+import { generateInvoiceNumber } from '../utils/generateInvoiceNumber.js';
 
 // @desc    Get all subscriptions
 // @route   GET /api/admin/subscriptions
@@ -164,7 +165,11 @@ export const approveSubscription = async (req, res) => {
     // Generate invoice
     let invoice = null;
     try {
+      // Generate invoice number before creating invoice to avoid race condition
+      const invoiceNumber = await generateInvoiceNumber();
+      
       invoice = await Invoice.create({
+        invoiceNumber,
         subscriptionId: subscription._id,
         userId: subscription.userId,
         planName: subscription.planName,
@@ -340,7 +345,11 @@ export const reactivateSubscription = async (req, res) => {
 
     // Generate new invoice for reactivated subscription
     try {
+      // Generate invoice number before creating invoice to avoid race condition
+      const invoiceNumber = await generateInvoiceNumber();
+      
       const invoice = await Invoice.create({
+        invoiceNumber,
         subscriptionId: subscription._id,
         userId: subscription.userId,
         planName: subscription.planName,

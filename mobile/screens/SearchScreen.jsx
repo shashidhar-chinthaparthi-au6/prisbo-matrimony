@@ -7,6 +7,9 @@ import { getCurrentSubscription } from '../services/subscriptionService';
 import { getOrCreateChat } from '../services/chatService';
 import { getImageUrl } from '../config/api';
 import SubscriptionRequiredModal from '../components/SubscriptionRequiredModal';
+import ProfileIncompleteModal from '../components/ProfileIncompleteModal';
+import ProfileVerificationPendingModal from '../components/ProfileVerificationPendingModal';
+import { isProfileComplete } from '../utils/profileUtils';
 
 const SearchScreen = ({ navigation }) => {
   const [filters, setFilters] = useState({
@@ -23,9 +26,12 @@ const SearchScreen = ({ navigation }) => {
   const [hasProfile, setHasProfile] = useState(true);
   const [checkingProfile, setCheckingProfile] = useState(true);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [showProfileIncompleteModal, setShowProfileIncompleteModal] = useState(false);
+  const [showVerificationPendingModal, setShowVerificationPendingModal] = useState(false);
   const hasSearchedRef = useRef(false);
 
   const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
+  const { data: profileData } = useQuery('myProfile', getMyProfile);
   const hasActiveSubscription = subscriptionData?.hasActiveSubscription;
 
   useEffect(() => {
@@ -33,15 +39,36 @@ const SearchScreen = ({ navigation }) => {
   }, []);
 
   useEffect(() => {
-    // Always show modal if user doesn't have active subscription
+    // Priority: Subscription > Profile Verification > Profile Completion
     if (subscriptionData && !hasActiveSubscription) {
       setShowSubscriptionModal(true);
-    } else if (hasProfile && !checkingProfile && !hasSearchedRef.current && hasActiveSubscription) {
-      // Only perform search if user has active subscription
-      hasSearchedRef.current = true;
-      performSearch();
+      setShowProfileIncompleteModal(false);
+      setShowVerificationPendingModal(false);
+    } else if (hasActiveSubscription && subscriptionData && profileData?.profile) {
+      // Check verification status first
+      const verificationStatus = profileData.profile.verificationStatus;
+      if (verificationStatus === 'pending' || verificationStatus === 'rejected') {
+        setShowVerificationPendingModal(true);
+        setShowSubscriptionModal(false);
+        setShowProfileIncompleteModal(false);
+      } else if (verificationStatus === 'approved') {
+        // Check if profile is complete
+        if (!isProfileComplete(profileData.profile)) {
+          setShowProfileIncompleteModal(true);
+          setShowSubscriptionModal(false);
+          setShowVerificationPendingModal(false);
+        } else {
+          setShowProfileIncompleteModal(false);
+          setShowVerificationPendingModal(false);
+          // Only perform search if user has active subscription, approved profile, and complete profile
+          if (hasProfile && !checkingProfile && !hasSearchedRef.current) {
+            hasSearchedRef.current = true;
+            performSearch();
+          }
+        }
+      }
     }
-  }, [hasProfile, checkingProfile, hasActiveSubscription, subscriptionData]);
+  }, [hasProfile, checkingProfile, hasActiveSubscription, subscriptionData, profileData]);
 
   const performSearch = async () => {
     if (!hasProfile) {
@@ -74,9 +101,16 @@ const SearchScreen = ({ navigation }) => {
       console.error('Error response:', error.response?.data); // Debug log
       setProfiles([]);
       
-      // Check if it's a subscription required error
-      if (error.response?.status === 403 || error.response?.data?.requiresSubscription) {
-        setShowSubscriptionModal(true);
+      // Check error type
+      if (error.response?.status === 403) {
+        const errorData = error.response?.data;
+        if (errorData?.verificationStatus === 'pending' || errorData?.verificationStatus === 'rejected') {
+          setShowVerificationPendingModal(true);
+          setShowSubscriptionModal(false);
+        } else if (errorData?.requiresSubscription) {
+          setShowSubscriptionModal(true);
+          setShowVerificationPendingModal(false);
+        }
       } else {
         const errorMessage = error.response?.data?.message || error.message || 'Search failed';
         console.error('Search failed:', errorMessage);
@@ -99,6 +133,20 @@ const SearchScreen = ({ navigation }) => {
   };
 
   const handleSearch = async () => {
+    if (!hasActiveSubscription) {
+      setShowSubscriptionModal(true);
+      return;
+    }
+    // Check verification status
+    const verificationStatus = profileData?.profile?.verificationStatus;
+    if (verificationStatus === 'pending' || verificationStatus === 'rejected') {
+      setShowVerificationPendingModal(true);
+      return;
+    }
+    if (!profileData?.profile || !isProfileComplete(profileData.profile)) {
+      setShowProfileIncompleteModal(true);
+      return;
+    }
     if (!hasProfile) {
       alert('Please create your profile first');
       return;
@@ -272,6 +320,17 @@ const SearchScreen = ({ navigation }) => {
       <SubscriptionRequiredModal
         isOpen={showSubscriptionModal}
         onSubscribe={() => navigation.navigate('Subscription')}
+      />
+      <ProfileIncompleteModal
+        isOpen={showProfileIncompleteModal}
+        onCompleteProfile={() => navigation.navigate('Profile', { edit: true })}
+      />
+      <ProfileVerificationPendingModal
+        isOpen={showVerificationPendingModal}
+        verificationStatus={profileData?.profile?.verificationStatus}
+        rejectionReason={profileData?.profile?.rejectionReason}
+        onUpdateProfile={() => navigation.navigate('Profile', { edit: true })}
+        onGoHome={() => navigation.navigate('Home')}
       />
     </View>
   );

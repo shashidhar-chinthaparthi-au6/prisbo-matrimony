@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from 'react-query';
 import { getSentInterests, getReceivedInterests, getMutualMatches, acceptInterest, rejectInterest } from '../services/interestService';
+import { getMyProfile } from '../services/profileService';
 import { getCurrentSubscription } from '../services/subscriptionService';
 import { getOrCreateChat } from '../services/chatService';
 import { getImageUrl } from '../config/api';
@@ -8,14 +9,18 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import SubscriptionRequiredModal from '../components/SubscriptionRequiredModal';
+import ProfileIncompleteModal from '../components/ProfileIncompleteModal';
+import { isProfileComplete } from '../utils/profileUtils';
 
 const Interests = () => {
   const [activeTab, setActiveTab] = useState('received');
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [showProfileIncompleteModal, setShowProfileIncompleteModal] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
 
   const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
+  const { data: profileData } = useQuery('myProfile', getMyProfile);
   const { data: sentData, refetch: refetchSent } = useQuery('sentInterests', getSentInterests, {
     retry: false,
     onError: (error) => {
@@ -44,11 +49,20 @@ const Interests = () => {
   const hasActiveSubscription = subscriptionData?.hasActiveSubscription;
 
   useEffect(() => {
-    // Always show modal if user doesn't have active subscription
+    // Show subscription modal if user doesn't have active subscription
     if (subscriptionData && !hasActiveSubscription) {
       setShowSubscriptionModal(true);
+      setShowProfileIncompleteModal(false);
+    } else if (hasActiveSubscription && subscriptionData) {
+      // Check if profile exists and is complete
+      if (!profileData?.profile || !isProfileComplete(profileData.profile)) {
+        setShowProfileIncompleteModal(true);
+        setShowSubscriptionModal(false);
+      } else {
+        setShowProfileIncompleteModal(false);
+      }
     }
-  }, [subscriptionData, hasActiveSubscription]);
+  }, [subscriptionData, hasActiveSubscription, profileData]);
 
   const handleAccept = async (id) => {
     try {
@@ -234,6 +248,9 @@ const Interests = () => {
 
       <SubscriptionRequiredModal
         isOpen={showSubscriptionModal}
+      />
+      <ProfileIncompleteModal
+        isOpen={showProfileIncompleteModal}
       />
     </div>
   );

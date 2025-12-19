@@ -20,6 +20,15 @@ export const protect = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'User not found' });
     }
 
+    // Check if user is blocked
+    if (req.user.isActive === false) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Your account has been blocked. Please contact support.',
+        accountBlocked: true 
+      });
+    }
+
     next();
   } catch (error) {
     return res.status(401).json({ success: false, message: 'Not authorized to access this route' });

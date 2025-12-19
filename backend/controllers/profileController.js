@@ -44,7 +44,7 @@ export const createOrUpdateProfile = async (req, res) => {
     if (profile) {
       // Update existing profile
       Object.keys(profileData).forEach((key) => {
-        if (profileData[key] !== undefined && key !== 'preferences') {
+        if (profileData[key] !== undefined && key !== 'preferences' && key !== 'verificationStatus' && key !== 'verifiedBy' && key !== 'verifiedAt' && key !== 'rejectionReason') {
           if (typeof profileData[key] === 'object' && !Array.isArray(profileData[key]) && profileData[key] !== null) {
             profile[key] = { ...profile[key], ...profileData[key] };
           } else {
@@ -77,6 +77,15 @@ export const createOrUpdateProfile = async (req, res) => {
             }
           }
         });
+      }
+
+      // Set verification status to pending when profile is updated (unless already approved)
+      if (profile.verificationStatus === 'approved') {
+        // If profile was approved and is being updated, set back to pending for re-verification
+        profile.verificationStatus = 'pending';
+        profile.verifiedBy = undefined;
+        profile.verifiedAt = undefined;
+        profile.rejectionReason = undefined;
       }
 
       await profile.save();
@@ -132,10 +141,11 @@ export const createOrUpdateProfile = async (req, res) => {
         }
       }
 
-      // Create new profile
+      // Create new profile with pending verification status
       profile = await Profile.create({
         userId,
         ...profileData,
+        verificationStatus: 'pending', // New profiles start as pending
       });
     }
 
@@ -279,6 +289,13 @@ export const uploadPhotos = async (req, res) => {
     }
 
     profile.photos.push(...uploadedPhotos);
+    // Set verification status to pending when photos are uploaded
+    if (profile.verificationStatus === 'approved') {
+      profile.verificationStatus = 'pending';
+      profile.verifiedBy = undefined;
+      profile.verifiedAt = undefined;
+      profile.rejectionReason = undefined;
+    }
     await profile.save();
 
     res.status(200).json({

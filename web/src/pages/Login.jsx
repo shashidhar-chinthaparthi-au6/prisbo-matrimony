@@ -29,7 +29,20 @@ const Login = () => {
       toast.success('Login successful!');
       navigate('/');
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Login failed');
+      const errorMessage = error.response?.data?.message || 'Login failed';
+      // Show blocked account message more prominently
+      if (error.response?.data?.accountBlocked || errorMessage.includes('blocked')) {
+        toast.error(errorMessage, {
+          duration: 5000,
+          style: {
+            background: '#fee2e2',
+            color: '#991b1b',
+            border: '1px solid #fca5a5',
+          },
+        });
+      } else {
+        toast.error(errorMessage);
+      }
     } finally {
       setLoading(false);
     }

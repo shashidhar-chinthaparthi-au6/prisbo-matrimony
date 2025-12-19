@@ -3,16 +3,21 @@ import { useQuery } from 'react-query';
 import { useNavigate } from 'react-router-dom';
 import { getCurrentSubscription } from '../services/subscriptionService';
 import { getNotifications, markAsRead, markAllAsRead, deleteNotification, deleteAllNotifications } from '../services/notificationService';
+import { getMyProfile } from '../services/profileService';
 import { getImageUrl } from '../config/api';
 import toast from 'react-hot-toast';
 import SubscriptionRequiredModal from '../components/SubscriptionRequiredModal';
+import ProfileIncompleteModal from '../components/ProfileIncompleteModal';
+import { isProfileComplete } from '../utils/profileUtils';
 
 const Notifications = () => {
   const navigate = useNavigate();
   const [filter, setFilter] = useState('all'); // 'all' or 'unread'
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [showProfileIncompleteModal, setShowProfileIncompleteModal] = useState(false);
 
   const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
+  const { data: profileData } = useQuery('myProfile', getMyProfile);
   const { data, refetch } = useQuery(
     ['notifications', filter],
     () => getNotifications({ unreadOnly: filter === 'unread' }),
@@ -30,11 +35,20 @@ const Notifications = () => {
   const hasActiveSubscription = subscriptionData?.hasActiveSubscription;
 
   useEffect(() => {
-    // Always show modal if user doesn't have active subscription
+    // Show subscription modal if user doesn't have active subscription
     if (subscriptionData && !hasActiveSubscription) {
       setShowSubscriptionModal(true);
+      setShowProfileIncompleteModal(false);
+    } else if (hasActiveSubscription && subscriptionData) {
+      // Check if profile exists and is complete
+      if (!profileData?.profile || !isProfileComplete(profileData.profile)) {
+        setShowProfileIncompleteModal(true);
+        setShowSubscriptionModal(false);
+      } else {
+        setShowProfileIncompleteModal(false);
+      }
     }
-  }, [subscriptionData, hasActiveSubscription]);
+  }, [subscriptionData, hasActiveSubscription, profileData]);
 
   const handleMarkAsRead = async (id) => {
     try {
@@ -206,6 +220,9 @@ const Notifications = () => {
 
       <SubscriptionRequiredModal
         isOpen={showSubscriptionModal}
+      />
+      <ProfileIncompleteModal
+        isOpen={showProfileIncompleteModal}
       />
     </div>
   );

@@ -9,6 +9,8 @@ import { getImageUrl } from '../config/api';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import SubscriptionRequiredModal from '../components/SubscriptionRequiredModal';
+import ProfileIncompleteModal from '../components/ProfileIncompleteModal';
+import { isProfileComplete } from '../utils/profileUtils';
 
 const Search = () => {
   const navigate = useNavigate();
@@ -25,6 +27,7 @@ const Search = () => {
   });
   const [showFilters, setShowFilters] = useState(false);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [showProfileIncompleteModal, setShowProfileIncompleteModal] = useState(false);
 
   const { data: profileData } = useQuery('myProfile', getMyProfile);
   const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
@@ -45,14 +48,22 @@ const Search = () => {
   const hasActiveSubscription = subscriptionData?.hasActiveSubscription;
 
   useEffect(() => {
-    // Show modal immediately if user doesn't have active subscription
+    // Show subscription modal if user doesn't have active subscription
     if (subscriptionData && !hasActiveSubscription) {
       setShowSubscriptionModal(true);
-    } else if (hasActiveSubscription) {
-      // Only refetch if user has active subscription
-      refetch();
+      setShowProfileIncompleteModal(false);
+    } else if (hasActiveSubscription && subscriptionData) {
+      // Check if profile exists and is complete
+      if (!profileData?.profile || !isProfileComplete(profileData.profile)) {
+        setShowProfileIncompleteModal(true);
+        setShowSubscriptionModal(false);
+      } else {
+        setShowProfileIncompleteModal(false);
+        // Only refetch if user has active subscription and profile is complete
+        refetch();
+      }
     }
-  }, [filters.page, hasActiveSubscription, subscriptionData]);
+  }, [filters.page, hasActiveSubscription, subscriptionData, profileData]);
 
   const handleSearch = () => {
     if (!hasActiveSubscription) {
@@ -327,6 +338,9 @@ const Search = () => {
 
       <SubscriptionRequiredModal
         isOpen={showSubscriptionModal}
+      />
+      <ProfileIncompleteModal
+        isOpen={showProfileIncompleteModal}
       />
     </div>
   );

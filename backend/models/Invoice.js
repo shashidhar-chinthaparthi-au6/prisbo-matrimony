@@ -68,44 +68,21 @@ const invoiceSchema = new mongoose.Schema(
 
 const Invoice = mongoose.model('Invoice', invoiceSchema);
 
-// Generate invoice number
+// Generate invoice number (only if not provided)
 invoiceSchema.pre('save', async function (next) {
   // Only generate invoice number for new documents that don't have one
+  // If invoiceNumber is already set (from controller), skip generation
   if (!this.isNew || this.invoiceNumber) {
     return next();
   }
   
   try {
-    // Get the latest invoice number to ensure uniqueness
-    const latestInvoice = await Invoice.findOne({}, {}, { sort: { createdAt: -1 } });
-    
-    let nextNumber = 1;
-    if (latestInvoice && latestInvoice.invoiceNumber) {
-      // Extract the number from the latest invoice
-      const match = latestInvoice.invoiceNumber.match(/INV-\d{6}-(\d+)/);
-      if (match) {
-        nextNumber = parseInt(match[1], 10) + 1;
-      }
-    } else {
-      // Count all invoices to get the next number
-      const count = await Invoice.countDocuments();
-      nextNumber = count + 1;
-    }
-    
-    const year = new Date().getFullYear();
-    const month = String(new Date().getMonth() + 1).padStart(2, '0');
-    this.invoiceNumber = `INV-${year}${month}-${String(nextNumber).padStart(5, '0')}`;
-    
-    // Ensure uniqueness by checking if this invoice number already exists
-    const existing = await Invoice.findOne({ invoiceNumber: this.invoiceNumber });
-    if (existing) {
-      // If exists, increment and try again
-      nextNumber++;
-      this.invoiceNumber = `INV-${year}${month}-${String(nextNumber).padStart(5, '0')}`;
-    }
-    
+    // Import the utility function dynamically to avoid circular dependency
+    const { generateInvoiceNumber } = await import('../utils/generateInvoiceNumber.js');
+    this.invoiceNumber = await generateInvoiceNumber();
     next();
   } catch (error) {
+    console.error('Error in invoice pre-save hook:', error);
     // Fallback: use timestamp-based approach
     const timestamp = Date.now();
     const random = Math.floor(Math.random() * 1000);

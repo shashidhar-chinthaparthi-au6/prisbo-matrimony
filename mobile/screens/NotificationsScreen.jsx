@@ -2,8 +2,11 @@ import { useState, useEffect } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { useQuery } from 'react-query';
 import { getCurrentSubscription } from '../services/subscriptionService';
+import { getMyProfile } from '../services/profileService';
 import { getNotifications, markAsRead, markAllAsRead, deleteNotification, deleteAllNotifications } from '../services/notificationService';
 import SubscriptionRequiredModal from '../components/SubscriptionRequiredModal';
+import ProfileIncompleteModal from '../components/ProfileIncompleteModal';
+import { isProfileComplete } from '../utils/profileUtils';
 
 const NotificationsScreen = ({ navigation }) => {
   const [filter, setFilter] = useState('all');
@@ -11,8 +14,10 @@ const NotificationsScreen = ({ navigation }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [showProfileIncompleteModal, setShowProfileIncompleteModal] = useState(false);
 
   const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
+  const { data: profileData } = useQuery('myProfile', getMyProfile);
   const hasActiveSubscription = subscriptionData?.hasActiveSubscription;
 
   const loadNotifications = async () => {
@@ -36,15 +41,23 @@ const NotificationsScreen = ({ navigation }) => {
   };
 
   useEffect(() => {
-    // Always show modal if user doesn't have active subscription
+    // Show subscription modal if user doesn't have active subscription
     if (subscriptionData && !hasActiveSubscription) {
       setShowSubscriptionModal(true);
-    } else if (hasActiveSubscription) {
-      loadNotifications();
-      const interval = setInterval(loadNotifications, 5000);
-      return () => clearInterval(interval);
+      setShowProfileIncompleteModal(false);
+    } else if (hasActiveSubscription && subscriptionData) {
+      // Check if profile exists and is complete
+      if (!profileData?.profile || !isProfileComplete(profileData.profile)) {
+        setShowProfileIncompleteModal(true);
+        setShowSubscriptionModal(false);
+      } else {
+        setShowProfileIncompleteModal(false);
+        loadNotifications();
+        const interval = setInterval(loadNotifications, 5000);
+        return () => clearInterval(interval);
+      }
     }
-  }, [filter, subscriptionData, hasActiveSubscription]);
+  }, [filter, subscriptionData, hasActiveSubscription, profileData]);
 
   const handleNotificationPress = async (notification) => {
     if (!notification.isRead) {
@@ -218,6 +231,10 @@ const NotificationsScreen = ({ navigation }) => {
       <SubscriptionRequiredModal
         isOpen={showSubscriptionModal}
         onSubscribe={() => navigation.navigate('Subscription')}
+      />
+      <ProfileIncompleteModal
+        isOpen={showProfileIncompleteModal}
+        onCompleteProfile={() => navigation.navigate('Profile', { edit: true })}
       />
     </View>
   );

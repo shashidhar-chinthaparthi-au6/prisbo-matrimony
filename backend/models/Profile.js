@@ -111,6 +111,22 @@ const profileSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    // Profile Verification
+    verificationStatus: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected'],
+      default: 'pending',
+    },
+    verifiedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    verifiedAt: {
+      type: Date,
+    },
+    rejectionReason: {
+      type: String,
+    },
   },
   {
     timestamps: true,
@@ -139,6 +155,8 @@ profileSchema.index({ 'personalInfo.age': 1 });
 profileSchema.index({ type: 1 });
 profileSchema.index({ isActive: 1 });
 profileSchema.index({ createdAt: -1 });
+profileSchema.index({ verificationStatus: 1 });
+profileSchema.index({ verificationStatus: 1, createdAt: -1 });
 
 export default mongoose.model('Profile', profileSchema);
 

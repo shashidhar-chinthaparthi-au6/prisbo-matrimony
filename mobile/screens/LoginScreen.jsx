@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { login } from '../services/authService';
 
@@ -28,7 +28,13 @@ const LoginScreen = ({ navigation }) => {
       // No need to navigate manually - the AppNavigator will show the correct screen
     } catch (error) {
       console.error('Login error:', error);
-      alert(error.response?.data?.message || 'Login failed');
+      const errorMessage = error.response?.data?.message || 'Login failed';
+      // Show blocked account message with clear title
+      if (error.response?.data?.accountBlocked || errorMessage.includes('blocked')) {
+        Alert.alert('Account Blocked', errorMessage);
+      } else {
+        Alert.alert('Login Failed', errorMessage);
+      }
     } finally {
       setLoading(false);
     }

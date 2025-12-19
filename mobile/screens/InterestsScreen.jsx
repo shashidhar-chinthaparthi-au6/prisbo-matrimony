@@ -3,10 +3,13 @@ import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, 
 import { useQuery } from 'react-query';
 import { getSentInterests, getReceivedInterests, getMutualMatches, acceptInterest, rejectInterest } from '../services/interestService';
 import { getCurrentSubscription } from '../services/subscriptionService';
+import { getMyProfile } from '../services/profileService';
 import { getOrCreateChat } from '../services/chatService';
 import { getImageUrl } from '../config/api';
 import { useAuth } from '../context/AuthContext';
 import SubscriptionRequiredModal from '../components/SubscriptionRequiredModal';
+import ProfileIncompleteModal from '../components/ProfileIncompleteModal';
+import { isProfileComplete } from '../utils/profileUtils';
 
 const InterestsScreen = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState('received');
@@ -15,21 +18,31 @@ const InterestsScreen = ({ navigation }) => {
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [showProfileIncompleteModal, setShowProfileIncompleteModal] = useState(false);
   const { user } = useAuth();
 
   const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
+  const { data: profileData } = useQuery('myProfile', getMyProfile);
   const hasActiveSubscription = subscriptionData?.hasActiveSubscription;
 
   useEffect(() => {
-    // Always show modal if user doesn't have active subscription
+    // Show subscription modal if user doesn't have active subscription
     if (subscriptionData && !hasActiveSubscription) {
       setShowSubscriptionModal(true);
-    } else if (hasActiveSubscription) {
-      loadData();
-      const interval = setInterval(loadData, 5000);
-      return () => clearInterval(interval);
+      setShowProfileIncompleteModal(false);
+    } else if (hasActiveSubscription && subscriptionData) {
+      // Check if profile exists and is complete
+      if (!profileData?.profile || !isProfileComplete(profileData.profile)) {
+        setShowProfileIncompleteModal(true);
+        setShowSubscriptionModal(false);
+      } else {
+        setShowProfileIncompleteModal(false);
+    loadData();
+    const interval = setInterval(loadData, 5000);
+    return () => clearInterval(interval);
+      }
     }
-  }, [activeTab, subscriptionData, hasActiveSubscription]);
+  }, [activeTab, subscriptionData, hasActiveSubscription, profileData]);
 
   const loadData = async () => {
     if (!hasActiveSubscription) {
@@ -212,6 +225,10 @@ const InterestsScreen = ({ navigation }) => {
       <SubscriptionRequiredModal
         isOpen={showSubscriptionModal}
         onSubscribe={() => navigation.navigate('Subscription')}
+      />
+      <ProfileIncompleteModal
+        isOpen={showProfileIncompleteModal}
+        onCompleteProfile={() => navigation.navigate('Profile', { edit: true })}
       />
     </View>
   );

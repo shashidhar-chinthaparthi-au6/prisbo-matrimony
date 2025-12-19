@@ -227,7 +227,27 @@ const AppNavigator = () => {
               <Stack.Screen 
                 name="Profile" 
                 component={ProfileScreen}
-                options={{ title: 'My Profile' }}
+                options={({ navigation }) => ({
+                  title: 'My Profile',
+                  headerRight: () => {
+                    const { logout } = useAuth();
+                    const handleLogout = async () => {
+                      await logout();
+                    };
+                    return (
+                      <View style={styles.headerRight}>
+                        <Tooltip text="Logout">
+                          <TouchableOpacity
+                            onPress={handleLogout}
+                            style={styles.logoutButton}
+                          >
+                            <MaterialIcons name="logout" size={24} color="#333" />
+                          </TouchableOpacity>
+                        </Tooltip>
+                      </View>
+                    );
+                  },
+                })}
               />
               <Stack.Screen 
                 name="ProfileDetail" 
@@ -242,7 +262,27 @@ const AppNavigator = () => {
               <Stack.Screen 
                 name="Subscription" 
                 component={SubscriptionScreen}
-                options={{ title: 'Subscription' }}
+                options={({ navigation }) => ({
+                  title: 'Subscription',
+                  headerRight: () => {
+                    const { logout } = useAuth();
+                    const handleLogout = async () => {
+                      await logout();
+                    };
+                    return (
+                      <View style={styles.headerRight}>
+                        <Tooltip text="Logout">
+                          <TouchableOpacity
+                            onPress={handleLogout}
+                            style={styles.logoutButton}
+                          >
+                            <MaterialIcons name="logout" size={24} color="#333" />
+                          </TouchableOpacity>
+                        </Tooltip>
+                      </View>
+                    );
+                  },
+                })}
               />
             </>
           )}

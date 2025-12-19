@@ -81,10 +81,11 @@ export const login = async (req, res) => {
     }
 
     // Check if user is active
-    if (!user.isActive) {
-      return res.status(401).json({
+    if (user.isActive === false) {
+      return res.status(403).json({
         success: false,
-        message: 'Your account has been deactivated',
+        message: 'Your account has been blocked. Please contact the admin.',
+        accountBlocked: true,
       });
     }
 

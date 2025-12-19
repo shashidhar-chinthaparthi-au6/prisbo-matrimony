@@ -3,28 +3,41 @@ import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, 
 import { useQuery } from 'react-query';
 import { getFavorites, removeFavorite } from '../services/favoriteService';
 import { getCurrentSubscription } from '../services/subscriptionService';
+import { getMyProfile } from '../services/profileService';
 import { getImageUrl } from '../config/api';
 import SubscriptionRequiredModal from '../components/SubscriptionRequiredModal';
+import ProfileIncompleteModal from '../components/ProfileIncompleteModal';
+import { isProfileComplete } from '../utils/profileUtils';
 
 const FavoritesScreen = ({ navigation }) => {
   const [favorites, setFavorites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [count, setCount] = useState(0);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [showProfileIncompleteModal, setShowProfileIncompleteModal] = useState(false);
 
   const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
+  const { data: profileData } = useQuery('myProfile', getMyProfile);
   const hasActiveSubscription = subscriptionData?.hasActiveSubscription;
 
   useEffect(() => {
-    // Always show modal if user doesn't have active subscription
+    // Show subscription modal if user doesn't have active subscription
     if (subscriptionData && !hasActiveSubscription) {
       setShowSubscriptionModal(true);
-    } else if (hasActiveSubscription) {
-      loadFavorites();
-      const interval = setInterval(loadFavorites, 5000);
-      return () => clearInterval(interval);
+      setShowProfileIncompleteModal(false);
+    } else if (hasActiveSubscription && subscriptionData) {
+      // Check if profile exists and is complete
+      if (!profileData?.profile || !isProfileComplete(profileData.profile)) {
+        setShowProfileIncompleteModal(true);
+        setShowSubscriptionModal(false);
+      } else {
+        setShowProfileIncompleteModal(false);
+        loadFavorites();
+        const interval = setInterval(loadFavorites, 5000);
+        return () => clearInterval(interval);
+      }
     }
-  }, [subscriptionData, hasActiveSubscription]);
+  }, [subscriptionData, hasActiveSubscription, profileData]);
 
   const loadFavorites = async () => {
     if (!hasActiveSubscription) {
@@ -129,6 +142,10 @@ const FavoritesScreen = ({ navigation }) => {
       <SubscriptionRequiredModal
         isOpen={showSubscriptionModal}
         onSubscribe={() => navigation.navigate('Subscription')}
+      />
+      <ProfileIncompleteModal
+        isOpen={showProfileIncompleteModal}
+        onCompleteProfile={() => navigation.navigate('Profile', { edit: true })}
       />
     </View>
   );
