@@ -24,6 +24,7 @@ const Favorites = () => {
   const hasActiveSubscription = subscriptionData?.hasActiveSubscription;
 
   useEffect(() => {
+    // Always show modal if user doesn't have active subscription
     if (subscriptionData && !hasActiveSubscription) {
       setShowSubscriptionModal(true);
     }
@@ -97,7 +98,6 @@ const Favorites = () => {
 
       <SubscriptionRequiredModal
         isOpen={showSubscriptionModal}
-        onClose={() => setShowSubscriptionModal(false)}
       />
     </div>
   );

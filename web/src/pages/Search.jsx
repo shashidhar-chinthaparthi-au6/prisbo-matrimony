@@ -45,12 +45,12 @@ const Search = () => {
   const hasActiveSubscription = subscriptionData?.hasActiveSubscription;
 
   useEffect(() => {
-    // Only refetch if user has active subscription
-    if (hasActiveSubscription) {
-      refetch();
-    } else if (subscriptionData && !hasActiveSubscription) {
-      // Show modal if subscription data is loaded and user doesn't have active subscription
+    // Show modal immediately if user doesn't have active subscription
+    if (subscriptionData && !hasActiveSubscription) {
       setShowSubscriptionModal(true);
+    } else if (hasActiveSubscription) {
+      // Only refetch if user has active subscription
+      refetch();
     }
   }, [filters.page, hasActiveSubscription, subscriptionData]);
 
@@ -327,7 +327,6 @@ const Search = () => {
 
       <SubscriptionRequiredModal
         isOpen={showSubscriptionModal}
-        onClose={() => setShowSubscriptionModal(false)}
       />
     </div>
   );

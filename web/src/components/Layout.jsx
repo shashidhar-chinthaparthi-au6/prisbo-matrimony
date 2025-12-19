@@ -39,8 +39,9 @@ const Layout = ({ children }) => {
       <header className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <Link to="/" className="flex items-center">
+            <Link to="/" className="flex flex-col items-start">
               <span className="text-2xl font-bold text-primary-600">Prisbo</span>
+              <span className="text-xs text-gray-600 -mt-1">Matrimony</span>
             </Link>
             <nav className="hidden md:flex space-x-8">
               {navItems.map((item) => (

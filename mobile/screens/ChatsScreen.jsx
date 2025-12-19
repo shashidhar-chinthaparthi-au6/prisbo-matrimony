@@ -21,20 +21,21 @@ const ChatsScreen = ({ navigation, route }) => {
 
   useEffect(() => {
     loadUserId();
+    // Always show modal if user doesn't have active subscription
     if (subscriptionData && !hasActiveSubscription) {
       setShowSubscriptionModal(true);
     } else if (hasActiveSubscription) {
-    loadChats();
-    if (route.params?.chatId) {
-      setSelectedChat(route.params.chatId);
-    }
-    
-    // Auto-refresh chats every 5 seconds
-    const chatsInterval = setInterval(() => {
       loadChats();
-    }, 5000);
-    
-    return () => clearInterval(chatsInterval);
+      if (route.params?.chatId) {
+        setSelectedChat(route.params.chatId);
+      }
+      
+      // Auto-refresh chats every 5 seconds
+      const chatsInterval = setInterval(() => {
+        loadChats();
+      }, 5000);
+      
+      return () => clearInterval(chatsInterval);
     }
   }, [route.params, subscriptionData, hasActiveSubscription]);
 
@@ -290,7 +291,6 @@ const ChatsScreen = ({ navigation, route }) => {
 
       <SubscriptionRequiredModal
         isOpen={showSubscriptionModal}
-        onClose={() => setShowSubscriptionModal(false)}
         onSubscribe={() => navigation.navigate('Subscription')}
       />
     </View>

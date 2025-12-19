@@ -16,12 +16,13 @@ const FavoritesScreen = ({ navigation }) => {
   const hasActiveSubscription = subscriptionData?.hasActiveSubscription;
 
   useEffect(() => {
+    // Always show modal if user doesn't have active subscription
     if (subscriptionData && !hasActiveSubscription) {
       setShowSubscriptionModal(true);
     } else if (hasActiveSubscription) {
-    loadFavorites();
-    const interval = setInterval(loadFavorites, 5000);
-    return () => clearInterval(interval);
+      loadFavorites();
+      const interval = setInterval(loadFavorites, 5000);
+      return () => clearInterval(interval);
     }
   }, [subscriptionData, hasActiveSubscription]);
 
@@ -127,7 +128,6 @@ const FavoritesScreen = ({ navigation }) => {
 
       <SubscriptionRequiredModal
         isOpen={showSubscriptionModal}
-        onClose={() => setShowSubscriptionModal(false)}
         onSubscribe={() => navigation.navigate('Subscription')}
       />
     </View>

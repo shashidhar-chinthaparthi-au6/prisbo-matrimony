@@ -33,16 +33,13 @@ const SearchScreen = ({ navigation }) => {
   }, []);
 
   useEffect(() => {
-    // Auto-search when profile is confirmed and filters are ready (only once)
-    if (hasProfile && !checkingProfile && !hasSearchedRef.current) {
-      hasSearchedRef.current = true;
+    // Always show modal if user doesn't have active subscription
+    if (subscriptionData && !hasActiveSubscription) {
+      setShowSubscriptionModal(true);
+    } else if (hasProfile && !checkingProfile && !hasSearchedRef.current && hasActiveSubscription) {
       // Only perform search if user has active subscription
-      if (hasActiveSubscription) {
-        performSearch();
-      } else if (subscriptionData && !hasActiveSubscription) {
-        // Show modal if subscription data is loaded and user doesn't have active subscription
-        setShowSubscriptionModal(true);
-      }
+      hasSearchedRef.current = true;
+      performSearch();
     }
   }, [hasProfile, checkingProfile, hasActiveSubscription, subscriptionData]);
 
@@ -259,20 +256,7 @@ const SearchScreen = ({ navigation }) => {
         </View>
       )}
 
-      {!hasActiveSubscription && subscriptionData ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyTitle}>Subscription Required</Text>
-          <Text style={styles.emptyText}>
-            You need an active subscription to search and view profiles. Please subscribe to continue.
-          </Text>
-          <TouchableOpacity
-            style={styles.createButton}
-            onPress={() => navigation.navigate('Subscription')}
-          >
-            <Text style={styles.createButtonText}>Subscribe Now</Text>
-          </TouchableOpacity>
-        </View>
-      ) : loading ? (
+      {loading ? (
         <ActivityIndicator size="large" style={styles.loader} />
       ) : (
         <FlatList
@@ -287,7 +271,6 @@ const SearchScreen = ({ navigation }) => {
 
       <SubscriptionRequiredModal
         isOpen={showSubscriptionModal}
-        onClose={() => setShowSubscriptionModal(false)}
         onSubscribe={() => navigation.navigate('Subscription')}
       />
     </View>

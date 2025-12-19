@@ -36,6 +36,7 @@ const NotificationsScreen = ({ navigation }) => {
   };
 
   useEffect(() => {
+    // Always show modal if user doesn't have active subscription
     if (subscriptionData && !hasActiveSubscription) {
       setShowSubscriptionModal(true);
     } else if (hasActiveSubscription) {
@@ -216,7 +217,6 @@ const NotificationsScreen = ({ navigation }) => {
 
       <SubscriptionRequiredModal
         isOpen={showSubscriptionModal}
-        onClose={() => setShowSubscriptionModal(false)}
         onSubscribe={() => navigation.navigate('Subscription')}
       />
     </View>

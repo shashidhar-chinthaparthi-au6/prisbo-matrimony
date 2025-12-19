@@ -62,6 +62,12 @@ const MainTabs = () => {
           fontWeight: 'bold',
           fontSize: 18,
         },
+        headerTitle: () => (
+          <View style={styles.logoContainer}>
+            <Text style={styles.logoTitle}>Prisbo</Text>
+            <Text style={styles.logoSubtitle}>Matrimony</Text>
+          </View>
+        ),
         headerRight: () => {
           const { logout } = useAuth();
           const handleLogout = async () => {
@@ -249,6 +255,20 @@ const AppNavigator = () => {
 };
 
 const styles = StyleSheet.create({
+  logoContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#ef4444',
+  },
+  logoSubtitle: {
+    fontSize: 10,
+    color: '#666',
+    marginTop: -2,
+  },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',

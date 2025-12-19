@@ -23,11 +23,13 @@ const ProfileDetailScreen = ({ route, navigation }) => {
   const isMyProfile = myProfileData?.profile?.userId?._id === data?.profile?.userId?._id;
 
   useEffect(() => {
-    // Check if subscription is required when profile loads
-    if (data?.profile && !isMyProfile && !hasActiveSubscription) {
-      setShowSubscriptionModal(true);
+    // Always show modal if user doesn't have active subscription (except for own profile)
+    if (subscriptionData && !hasActiveSubscription) {
+      if (!isMyProfile) {
+        setShowSubscriptionModal(true);
+      }
     }
-  }, [data, isMyProfile, hasActiveSubscription]);
+  }, [data, isMyProfile, hasActiveSubscription, subscriptionData]);
 
   const handleSendInterest = async () => {
     if (!hasActiveSubscription) {
@@ -203,7 +205,6 @@ const ProfileDetailScreen = ({ route, navigation }) => {
 
       <SubscriptionRequiredModal
         isOpen={showSubscriptionModal}
-        onClose={() => setShowSubscriptionModal(false)}
         onSubscribe={() => navigation.navigate('Subscription')}
       />
     </>
