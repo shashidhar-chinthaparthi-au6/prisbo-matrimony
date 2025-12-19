@@ -45,19 +45,12 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     marginBottom: 15,
   },
   title: {
     fontSize: 22,
     fontWeight: 'bold',
     color: '#000',
-  },
-  closeButton: {
-    fontSize: 28,
-    color: '#666',
   },
   message: {
     fontSize: 14,
