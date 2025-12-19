@@ -198,7 +198,6 @@ const ChatsScreen = ({ navigation, route }) => {
   if (!selectedChat) {
     return (
       <View style={styles.container}>
-        <Text style={styles.title}>Chats</Text>
         {loading ? (
           <ActivityIndicator size="large" style={styles.loader} />
         ) : (

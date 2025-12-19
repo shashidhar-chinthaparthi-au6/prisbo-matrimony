@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, FlatList, Image, StyleSheet, ActivityIndicator } from 'react-native';
 import { searchProfiles } from '../services/searchService';
 import { getMyProfile } from '../services/profileService';
@@ -19,10 +19,53 @@ const SearchScreen = ({ navigation }) => {
   const [showFilters, setShowFilters] = useState(false);
   const [hasProfile, setHasProfile] = useState(true);
   const [checkingProfile, setCheckingProfile] = useState(true);
+  const hasSearchedRef = useRef(false);
 
   useEffect(() => {
     checkProfile();
   }, []);
+
+  useEffect(() => {
+    // Auto-search when profile is confirmed and filters are ready (only once)
+    if (hasProfile && !checkingProfile && !hasSearchedRef.current) {
+      hasSearchedRef.current = true;
+      performSearch();
+    }
+  }, [hasProfile, checkingProfile]);
+
+  const performSearch = async () => {
+    if (!hasProfile) {
+      return;
+    }
+    setLoading(true);
+    try {
+      const response = await searchProfiles(filters);
+      console.log('Search response:', response); // Debug log
+      
+      // Handle response structure - API returns { success, profiles, pagination, message }
+      if (response && response.profiles) {
+        setProfiles(response.profiles);
+        if (response.profiles.length === 0 && response.message) {
+          // Only log message if no profiles found, don't alert
+          console.log('Search message:', response.message);
+        }
+      } else {
+        setProfiles([]);
+        if (response?.message) {
+          console.log('Search message:', response.message);
+        }
+      }
+    } catch (error) {
+      console.error('Search error:', error); // Debug log
+      console.error('Error response:', error.response?.data); // Debug log
+      setProfiles([]);
+      const errorMessage = error.response?.data?.message || error.message || 'Search failed';
+      console.error('Search failed:', errorMessage);
+      // Don't alert on auto-search, only on manual search
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const checkProfile = async () => {
     try {
@@ -43,12 +86,24 @@ const SearchScreen = ({ navigation }) => {
     setLoading(true);
     try {
       const response = await searchProfiles(filters);
-      setProfiles(response.profiles || []);
-      if (response.message) {
-        alert(response.message);
+      console.log('Search response:', response); // Debug log
+      
+      // Handle response structure - API returns { success, profiles, pagination, message }
+      if (response && response.profiles) {
+        setProfiles(response.profiles);
+        if (response.profiles.length === 0) {
+          alert(response.message || 'No profiles found. Try adjusting your filters.');
+        }
+      } else {
+        setProfiles([]);
+        alert(response?.message || 'No profiles found. Try adjusting your filters.');
       }
     } catch (error) {
-      alert(error.response?.data?.message || 'Search failed');
+      console.error('Search error:', error); // Debug log
+      console.error('Error response:', error.response?.data); // Debug log
+      setProfiles([]);
+      const errorMessage = error.response?.data?.message || error.message || 'Search failed';
+      alert(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -120,13 +175,12 @@ const SearchScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Search Profiles</Text>
+      <View style={styles.filterHeader}>
         <TouchableOpacity
           style={styles.filterButton}
           onPress={() => setShowFilters(!showFilters)}
         >
-          <Text>{showFilters ? 'Hide' : 'Show'} Filters</Text>
+          <Text style={styles.filterButtonText}>{showFilters ? 'Hide' : 'Show'} Filters</Text>
         </TouchableOpacity>
       </View>
 
@@ -197,22 +251,22 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
-  header: {
+  filterHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     alignItems: 'center',
     padding: 15,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
   filterButton: {
     padding: 8,
     backgroundColor: '#f0f0f0',
     borderRadius: 6,
+  },
+  filterButtonText: {
+    fontSize: 14,
+    color: '#333',
   },
   filtersContainer: {
     padding: 15,

@@ -6,6 +6,7 @@ import { sendInterest } from '../services/interestService';
 import { addFavorite, removeFavorite } from '../services/favoriteService';
 import { getOrCreateChat } from '../services/chatService';
 import { getImageUrl } from '../config/api';
+import Tooltip from '../components/Tooltip';
 
 const ProfileDetailScreen = ({ route, navigation }) => {
   const { id } = route.params;
@@ -15,11 +16,24 @@ const ProfileDetailScreen = ({ route, navigation }) => {
 
   const handleSendInterest = async () => {
     try {
-      await sendInterest({ toUserId: data.profile.userId._id });
-      alert('Interest sent successfully!');
-      refetch(); // Refetch to update interest status
+      const response = await sendInterest({ toUserId: data.profile.userId._id });
+      if (response.success) {
+        alert('Interest sent successfully!');
+        refetch(); // Refetch to update interest status
+      }
     } catch (error) {
-      alert(error.response?.data?.message || 'Failed to send interest');
+      // Handle "Interest already exists" case
+      if (error.response?.data?.message === 'Interest already exists' && error.response?.data?.interest) {
+        const interest = error.response.data.interest;
+        // Update the profile's interest status
+        if (data?.profile) {
+          data.profile.interestStatus = interest.status;
+        }
+        alert('Interest already sent. Status: ' + interest.status);
+        refetch(); // Refetch to update interest status
+      } else {
+        alert(error.response?.data?.message || 'Failed to send interest');
+      }
     }
   };
 
@@ -85,20 +99,34 @@ const ProfileDetailScreen = ({ route, navigation }) => {
             </Text>
           </View>
           <View style={styles.actions}>
-            <TouchableOpacity
-              style={[styles.iconButton, isFavorite && styles.iconButtonActive]}
-              onPress={handleFavorite}
-            >
-              <Text style={styles.iconText}>⭐</Text>
-            </TouchableOpacity>
+            <Tooltip text={isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}>
+              <TouchableOpacity
+                style={styles.iconButton}
+                onPress={handleFavorite}
+              >
+                <Text style={styles.iconText}>
+                  {isFavorite ? '⭐' : '☆'}
+                </Text>
+              </TouchableOpacity>
+            </Tooltip>
             {profile.interestStatus === 'accepted' ? (
-              <TouchableOpacity style={styles.interestButton} onPress={handleChat}>
-                <Text style={styles.interestButtonText}>Chat</Text>
-              </TouchableOpacity>
+              <Tooltip text="Start Chat">
+                <TouchableOpacity style={styles.interestButton} onPress={handleChat}>
+                  <Text style={styles.interestButtonText}>Chat</Text>
+                </TouchableOpacity>
+              </Tooltip>
+            ) : profile.interestStatus === 'pending' ? (
+              <Tooltip text="Interest Already Sent">
+                <TouchableOpacity style={[styles.interestButton, styles.interestButtonDisabled]} disabled>
+                  <Text style={styles.interestButtonText}>Interest Sent</Text>
+                </TouchableOpacity>
+              </Tooltip>
             ) : (
-              <TouchableOpacity style={styles.interestButton} onPress={handleSendInterest}>
-                <Text style={styles.interestButtonText}>Send Interest</Text>
-              </TouchableOpacity>
+              <Tooltip text="Send Interest">
+                <TouchableOpacity style={styles.interestButton} onPress={handleSendInterest}>
+                  <Text style={styles.interestButtonText}>Send Interest</Text>
+                </TouchableOpacity>
+              </Tooltip>
             )}
           </View>
         </View>
@@ -191,16 +219,13 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
   },
-  iconButtonActive: {
-    backgroundColor: '#ffd700',
-  },
   iconText: {
-    fontSize: 20,
+    fontSize: 24,
   },
   interestButton: {
     flex: 1,
@@ -208,6 +233,10 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
+  },
+  interestButtonDisabled: {
+    backgroundColor: '#9ca3af',
+    opacity: 0.7,
   },
   interestButtonText: {
     color: '#fff',

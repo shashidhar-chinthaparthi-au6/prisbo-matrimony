@@ -83,7 +83,6 @@ const FavoritesScreen = ({ navigation }) => {
   if (loading) {
     return (
       <View style={styles.container}>
-        <Text style={styles.title}>Favorites</Text>
         <ActivityIndicator size="large" style={styles.loader} />
       </View>
     );
@@ -91,7 +90,6 @@ const FavoritesScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Favorites ({count})</Text>
       
       {favorites.length === 0 ? (
         <View style={styles.emptyContainer}>

@@ -17,11 +17,24 @@ const ProfileDetail = () => {
 
   const handleSendInterest = async () => {
     try {
-      await sendInterest({ toUserId: data.profile.userId._id });
-      toast.success('Interest sent successfully!');
-      refetch(); // Refetch to update interest status
+      const response = await sendInterest({ toUserId: data.profile.userId._id });
+      if (response.success) {
+        toast.success('Interest sent successfully!');
+        refetch(); // Refetch to update interest status
+      }
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to send interest');
+      // Handle "Interest already exists" case
+      if (error.response?.data?.message === 'Interest already exists' && error.response?.data?.interest) {
+        const interest = error.response.data.interest;
+        // Update the profile's interest status
+        if (data?.profile) {
+          data.profile.interestStatus = interest.status;
+        }
+        toast.info('Interest already sent. Status: ' + interest.status);
+        refetch(); // Refetch to update interest status
+      } else {
+        toast.error(error.response?.data?.message || 'Failed to send interest');
+      }
     }
   };
 
@@ -107,6 +120,13 @@ const ProfileDetail = () => {
                   className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
                 >
                   Chat
+                </button>
+              ) : profile.interestStatus === 'pending' ? (
+                <button
+                  disabled
+                  className="px-4 py-2 bg-gray-400 text-white rounded-md cursor-not-allowed"
+                >
+                  Interest Sent
                 </button>
               ) : (
                 <button

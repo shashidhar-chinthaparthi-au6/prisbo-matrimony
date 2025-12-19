@@ -151,8 +151,6 @@ const InterestsScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Interests</Text>
-      
       <View style={styles.tabContainer}>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'received' && styles.activeTab]}

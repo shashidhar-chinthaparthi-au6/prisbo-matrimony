@@ -1,5 +1,5 @@
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api';
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://backend-ashy-eight-14.vercel.app/api';
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://backend-ashy-eight-14.vercel.app';
 
 export default API_BASE_URL;
 export const getImageUrl = (url) => {

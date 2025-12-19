@@ -5,12 +5,12 @@ import { useAuth } from '../context/AuthContext';
 import { getImageUrl } from '../config/api';
 import * as ImagePicker from 'expo-image-picker';
 
-const ProfileScreen = ({ route }) => {
+const ProfileScreen = ({ route, navigation }) => {
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState({});
   const [profile, setProfile] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
 
   useEffect(() => {
     loadProfile();
@@ -145,7 +145,6 @@ const ProfileScreen = ({ route }) => {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>My Profile</Text>
         {!editing && (
           <TouchableOpacity style={styles.editButton} onPress={() => setEditing(true)}>
             <Text style={styles.editButtonText}>Edit</Text>
@@ -255,6 +254,14 @@ const ProfileScreen = ({ route }) => {
           </Text>
           <Text style={styles.info}>Education: {displayProfile.education?.highestEducation || 'N/A'}</Text>
           <Text style={styles.info}>Occupation: {displayProfile.career?.occupation || 'N/A'}</Text>
+          <TouchableOpacity 
+            style={styles.logoutButton} 
+            onPress={async () => {
+              await logout();
+            }}
+          >
+            <Text style={styles.logoutButtonText}>Logout</Text>
+          </TouchableOpacity>
         </View>
       )}
     </ScrollView>
@@ -348,6 +355,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginBottom: 10,
+  },
+  logoutButton: {
+    backgroundColor: '#dc2626',
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 30,
+    marginBottom: 20,
+  },
+  logoutButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   emptyText: {
     fontSize: 16,
