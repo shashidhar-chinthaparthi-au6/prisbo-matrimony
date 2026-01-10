@@ -9,6 +9,7 @@ export const searchProfiles = async (req, res) => {
   try {
     const {
       type,
+      name,
       minAge,
       maxAge,
       city,
@@ -20,6 +21,9 @@ export const searchProfiles = async (req, res) => {
       maritalStatus,
       minHeight,
       maxHeight,
+      verificationStatus,
+      minIncome,
+      maxIncome,
       page = 1,
       limit = 20,
       sortBy = 'newest',
@@ -32,6 +36,9 @@ export const searchProfiles = async (req, res) => {
     const query = {
       userId: { $ne: userId }, // Exclude own profile
       isActive: true,
+      isVisible: true, // Only show profiles that are visible in search
+      verificationStatus: 'approved', // Only show verified profiles in search
+      deletedAt: null, // Exclude deleted profiles
     };
 
     // Get user's profile to determine opposite type
@@ -95,9 +102,36 @@ export const searchProfiles = async (req, res) => {
       query['religion.caste'] = new RegExp(caste, 'i');
     }
 
+    // Name/Keyword search (searches in firstName, lastName, and about)
+    if (name && name.trim() !== '') {
+      query.$or = [
+        { 'personalInfo.firstName': new RegExp(name, 'i') },
+        { 'personalInfo.lastName': new RegExp(name, 'i') },
+        { 'personalInfo.about': new RegExp(name, 'i') },
+      ];
+    }
+
     // Marital status filter
     if (maritalStatus) {
       query['personalInfo.maritalStatus'] = maritalStatus;
+    }
+
+    // Verification status filter (if provided, override default)
+    if (verificationStatus) {
+      query.verificationStatus = verificationStatus;
+    }
+
+    // Income filter (parse income strings like "5-10 Lakhs" or "10+ Lakhs")
+    if (minIncome || maxIncome) {
+      // This is a simplified implementation - you may need more sophisticated parsing
+      // For now, we'll do a regex match on the income string
+      if (minIncome) {
+        query['career.annualIncome'] = { $gte: minIncome };
+      }
+      if (maxIncome) {
+        if (!query['career.annualIncome']) query['career.annualIncome'] = {};
+        query['career.annualIncome'].$lte = maxIncome;
+      }
     }
 
     // Height filter (simplified - you may need to parse height strings)
@@ -121,6 +155,13 @@ export const searchProfiles = async (req, res) => {
         break;
       case 'ageDesc':
         sort = { 'personalInfo.age': -1 };
+        break;
+      case 'location':
+        // Sort by state, then city
+        sort = { 'location.state': 1, 'location.city': 1 };
+        break;
+      case 'name':
+        sort = { 'personalInfo.firstName': 1, 'personalInfo.lastName': 1 };
         break;
       default:
         sort = { createdAt: -1 };

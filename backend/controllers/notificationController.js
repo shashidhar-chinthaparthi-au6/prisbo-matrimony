@@ -9,9 +9,14 @@ export const getNotifications = async (req, res) => {
     const { page = 1, limit = 20, unreadOnly = false } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
+    const { type } = req.query; // Filter by notification type
+    
     const query = { userId: req.user.id };
-    if (unreadOnly === 'true') {
+    if (unreadOnly === 'true' || unreadOnly === true) {
       query.isRead = false;
+    }
+    if (type && type !== 'all') {
+      query.type = type;
     }
 
     const notifications = await Notification.find(query)
@@ -150,6 +155,103 @@ export const deleteAllNotifications = async (req, res) => {
     res.status(200).json({
       success: true,
       message: 'All notifications deleted',
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Get notification preferences
+// @route   GET /api/notifications/preferences
+// @access  Private
+export const getNotificationPreferences = async (req, res) => {
+  try {
+    const User = (await import('../models/User.js')).default;
+    const user = await User.findById(req.user.id).select('notificationPreferences');
+    
+    res.status(200).json({
+      success: true,
+      preferences: user.notificationPreferences || {
+        email: {
+          interest: true,
+          message: true,
+          profile: true,
+          subscription: true,
+          support: true,
+        },
+        push: {
+          interest: true,
+          message: true,
+          profile: true,
+          subscription: true,
+          support: true,
+        },
+        sound: true,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Update notification preferences
+// @route   PUT /api/notifications/preferences
+// @access  Private
+export const updateNotificationPreferences = async (req, res) => {
+  try {
+    const { preferences } = req.body;
+    const User = (await import('../models/User.js')).default;
+    
+    const user = await User.findById(req.user.id);
+    if (!user.notificationPreferences) {
+      user.notificationPreferences = {
+        email: {
+          interest: true,
+          message: true,
+          profile: true,
+          subscription: true,
+          support: true,
+        },
+        push: {
+          interest: true,
+          message: true,
+          profile: true,
+          subscription: true,
+          support: true,
+        },
+        sound: true,
+      };
+    }
+    
+    // Update preferences
+    if (preferences.email) {
+      user.notificationPreferences.email = {
+        ...user.notificationPreferences.email,
+        ...preferences.email,
+      };
+    }
+    if (preferences.push) {
+      user.notificationPreferences.push = {
+        ...user.notificationPreferences.push,
+        ...preferences.push,
+      };
+    }
+    if (preferences.sound !== undefined) {
+      user.notificationPreferences.sound = preferences.sound;
+    }
+    
+    await user.save();
+    
+    res.status(200).json({
+      success: true,
+      preferences: user.notificationPreferences,
+      message: 'Notification preferences updated',
     });
   } catch (error) {
     res.status(500).json({

@@ -9,7 +9,7 @@ import { generateInvoiceNumber } from '../utils/generateInvoiceNumber.js';
 // @access  Private/Admin
 export const getAllSubscriptions = async (req, res) => {
   try {
-    const { page = 1, limit = 20, status, paymentMethod } = req.query;
+    const { page = 1, limit = 10, status, paymentMethod, planId, search } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const query = {};
@@ -19,9 +19,24 @@ export const getAllSubscriptions = async (req, res) => {
     if (paymentMethod) {
       query.paymentMethod = paymentMethod;
     }
+    if (planId) {
+      query.planId = planId;
+    }
+    if (search) {
+      // Search by user email or phone
+      const User = (await import('../models/User.js')).default;
+      const users = await User.find({
+        $or: [
+          { email: new RegExp(search, 'i') },
+          { phone: new RegExp(search, 'i') },
+        ],
+      }).select('_id');
+      const userIds = users.map(u => u._id);
+      query.userId = { $in: userIds };
+    }
 
     const subscriptions = await Subscription.find(query)
-      .populate('userId', 'email phone')
+      .populate('userId', 'email phone role companyName')
       .populate('planId')
       .populate('approvedBy', 'email')
       .skip(skip)
@@ -54,7 +69,7 @@ export const getAllSubscriptions = async (req, res) => {
 export const getPendingSubscriptions = async (req, res) => {
   try {
     const subscriptions = await Subscription.find({ status: 'pending' })
-      .populate('userId', 'email phone')
+      .populate('userId', 'email phone role companyName')
       .populate('planId')
       .sort({ createdAt: -1 });
 
@@ -77,7 +92,7 @@ export const getPendingSubscriptions = async (req, res) => {
 export const getSubscriptionById = async (req, res) => {
   try {
     const subscription = await Subscription.findById(req.params.id)
-      .populate('userId', 'email phone')
+      .populate('userId', 'email phone role companyName')
       .populate('planId')
       .populate('approvedBy', 'email');
 
@@ -196,11 +211,28 @@ export const approveSubscription = async (req, res) => {
       });
     }
 
+    // Set grace period end date (7 days after expiry by default)
+    const gracePeriodEndDate = new Date(subscription.endDate);
+    gracePeriodEndDate.setDate(gracePeriodEndDate.getDate() + (subscription.gracePeriodDays || 7));
+    subscription.gracePeriodEndDate = gracePeriodEndDate;
+
+    await subscription.save();
+
     // Update user subscription status
     await User.findByIdAndUpdate(subscription.userId, {
       subscriptionId: subscription._id,
       subscriptionStatus: 'active',
       subscriptionExpiryDate: subscription.endDate,
+    });
+
+    // Send notification to user
+    const Notification = (await import('../models/Notification.js')).default;
+    await Notification.create({
+      userId: subscription.userId,
+      type: 'subscription_approved',
+      title: 'Subscription Approved',
+      message: `Your subscription for ${subscription.planName} has been approved and is now active.`,
+      relatedUserId: req.user.id,
     });
 
     res.status(200).json({
@@ -248,6 +280,16 @@ export const rejectSubscription = async (req, res) => {
     // Update user subscription status
     await User.findByIdAndUpdate(subscription.userId, {
       subscriptionStatus: 'none',
+    });
+
+    // Send notification to user
+    const Notification = (await import('../models/Notification.js')).default;
+    await Notification.create({
+      userId: subscription.userId,
+      type: 'subscription_rejected',
+      title: 'Subscription Rejected',
+      message: `Your subscription request has been rejected. Reason: ${subscription.rejectionReason}`,
+      relatedUserId: req.user.id,
     });
 
     res.status(200).json({
@@ -579,6 +621,268 @@ export const deletePlan = async (req, res) => {
     res.status(200).json({
       success: true,
       message: 'Plan deleted successfully',
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Bulk approve subscriptions
+// @route   POST /api/admin/subscriptions/bulk-approve
+// @access  Private/Admin
+export const bulkApproveSubscriptions = async (req, res) => {
+  try {
+    const { subscriptionIds, cashReceivedDate, cashReceivedBy } = req.body;
+
+    if (!subscriptionIds || !Array.isArray(subscriptionIds) || subscriptionIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide an array of subscription IDs',
+      });
+    }
+
+    const subscriptions = await Subscription.find({
+      _id: { $in: subscriptionIds },
+      status: 'pending',
+    });
+
+    if (subscriptions.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No pending subscriptions found with the provided IDs',
+      });
+    }
+
+    const Notification = (await import('../models/Notification.js')).default;
+    const approvedSubscriptions = [];
+    
+    for (const subscription of subscriptions) {
+      subscription.status = 'approved';
+      subscription.approvedBy = req.user.id;
+      subscription.approvedAt = new Date();
+      subscription.startDate = new Date();
+      
+      const plan = await SubscriptionPlan.findById(subscription.planId);
+      const endDate = new Date(subscription.startDate);
+      endDate.setDate(endDate.getDate() + plan.duration);
+      subscription.endDate = endDate;
+
+      // Set grace period
+      const gracePeriodEndDate = new Date(subscription.endDate);
+      gracePeriodEndDate.setDate(gracePeriodEndDate.getDate() + (subscription.gracePeriodDays || 7));
+      subscription.gracePeriodEndDate = gracePeriodEndDate;
+
+      if (subscription.paymentMethod === 'cash' || subscription.paymentMethod === 'mixed') {
+        subscription.cashReceivedDate = cashReceivedDate || new Date();
+        subscription.cashReceivedBy = cashReceivedBy || 'Admin';
+      }
+
+      await subscription.save();
+
+      // Update user subscription status
+      if (subscription.userId) {
+        await User.findByIdAndUpdate(subscription.userId, {
+          subscriptionId: subscription._id,
+          subscriptionStatus: 'active',
+          subscriptionExpiryDate: subscription.endDate,
+        });
+      }
+
+      // Create invoice
+      const invoice = await Invoice.create({
+        subscriptionId: subscription._id,
+        userId: subscription.userId,
+        invoiceNumber: generateInvoiceNumber(),
+        amount: subscription.amount,
+        status: 'paid',
+      });
+
+      subscription.invoiceId = invoice._id;
+      await subscription.save();
+
+      // Create notification
+      if (subscription.userId) {
+        await Notification.create({
+          userId: subscription.userId,
+          type: 'subscription_approved',
+          title: 'Subscription Approved',
+          message: `Your ${plan.name} subscription has been approved`,
+          relatedUserId: req.user.id,
+        });
+      }
+
+      approvedSubscriptions.push(subscription);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `${approvedSubscriptions.length} subscription(s) approved successfully`,
+      count: approvedSubscriptions.length,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Bulk reject subscriptions
+// @route   POST /api/admin/subscriptions/bulk-reject
+// @access  Private/Admin
+export const bulkRejectSubscriptions = async (req, res) => {
+  try {
+    const { subscriptionIds, rejectionReason } = req.body;
+
+    if (!subscriptionIds || !Array.isArray(subscriptionIds) || subscriptionIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide an array of subscription IDs',
+      });
+    }
+
+    const subscriptions = await Subscription.find({
+      _id: { $in: subscriptionIds },
+      status: 'pending',
+    });
+
+    if (subscriptions.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No pending subscriptions found with the provided IDs',
+      });
+    }
+
+    const updateResult = await Subscription.updateMany(
+      { _id: { $in: subscriptions.map(s => s._id) } },
+      {
+        status: 'rejected',
+        rejectionReason: rejectionReason || 'Subscription request rejected',
+        rejectedAt: new Date(),
+      }
+    );
+
+    // Create notifications
+    const Notification = (await import('../models/Notification.js')).default;
+    const notifications = subscriptions.map(subscription => ({
+      userId: subscription.userId,
+      type: 'subscription_rejected',
+      title: 'Subscription Rejected',
+      message: `Your subscription request has been rejected. ${rejectionReason || 'Please contact support for more information.'}`,
+      relatedUserId: req.user.id,
+    })).filter(n => n.userId); // Only create notifications for subscriptions with userId
+
+    if (notifications.length > 0) {
+      await Notification.insertMany(notifications);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `${updateResult.modifiedCount} subscription(s) rejected successfully`,
+      count: updateResult.modifiedCount,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Bulk delete subscriptions
+// @route   DELETE /api/admin/subscriptions/bulk-delete
+// @access  Private/Admin
+export const bulkDeleteSubscriptions = async (req, res) => {
+  try {
+    const { subscriptionIds } = req.body;
+
+    if (!subscriptionIds || !Array.isArray(subscriptionIds) || subscriptionIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide an array of subscription IDs',
+      });
+    }
+
+    const deleteResult = await Subscription.deleteMany({
+      _id: { $in: subscriptionIds },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `${deleteResult.deletedCount} subscription(s) deleted successfully`,
+      count: deleteResult.deletedCount,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Process refund for subscription
+// @route   POST /api/admin/subscriptions/:id/refund
+// @access  Private/Admin
+export const processRefund = async (req, res) => {
+  try {
+    const { refundAmount, refundReason } = req.body;
+    const subscriptionId = req.params.id;
+
+    if (!refundAmount || refundAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid refund amount is required',
+      });
+    }
+
+    const subscription = await Subscription.findById(subscriptionId);
+
+    if (!subscription) {
+      return res.status(404).json({
+        success: false,
+        message: 'Subscription not found',
+      });
+    }
+
+    if (subscription.status !== 'approved' && subscription.status !== 'cancelled') {
+      return res.status(400).json({
+        success: false,
+        message: 'Refund can only be processed for approved or cancelled subscriptions',
+      });
+    }
+
+    if (refundAmount > subscription.amount) {
+      return res.status(400).json({
+        success: false,
+        message: 'Refund amount cannot exceed subscription amount',
+      });
+    }
+
+    subscription.refundAmount = refundAmount;
+    subscription.refundReason = refundReason || 'Admin processed refund';
+    subscription.refundedAt = new Date();
+    subscription.refundedBy = req.user.id;
+    subscription.refundStatus = 'completed';
+
+    await subscription.save();
+
+    // Send notification to user
+    const Notification = (await import('../models/Notification.js')).default;
+    await Notification.create({
+      userId: subscription.userId,
+      type: 'subscription_refund',
+      title: 'Refund Processed',
+      message: `A refund of ₹${refundAmount} has been processed for your subscription. Reason: ${subscription.refundReason}`,
+      relatedUserId: req.user.id,
+    });
+
+    res.status(200).json({
+      success: true,
+      subscription,
+      message: 'Refund processed successfully',
     });
   } catch (error) {
     res.status(500).json({

@@ -36,10 +36,59 @@ export const protect = async (req, res, next) => {
 };
 
 export const admin = (req, res, next) => {
-  if (req.user && req.user.role === 'admin') {
+  if (req.user && req.user.role === 'super_admin') {
     next();
   } else {
     res.status(403).json({ success: false, message: 'Not authorized as admin' });
   }
+};
+
+export const superAdmin = (req, res, next) => {
+  if (req.user && req.user.role === 'super_admin') {
+    next();
+  } else {
+    res.status(403).json({ success: false, message: 'Not authorized as super admin' });
+  }
+};
+
+export const vendor = (req, res, next) => {
+  if (req.user && req.user.role === 'vendor') {
+    next();
+  } else {
+    res.status(403).json({ success: false, message: 'Not authorized as vendor' });
+  }
+};
+
+export const vendorOrSuperAdmin = (req, res, next) => {
+  if (req.user && (req.user.role === 'vendor' || req.user.role === 'super_admin')) {
+    next();
+  } else {
+    res.status(403).json({ success: false, message: 'Not authorized as vendor or super admin' });
+  }
+};
+
+// Check if user has accepted terms and conditions
+// This middleware should be used after protect middleware
+export const checkTermsAccepted = (req, res, next) => {
+  // Skip terms check for terms-related endpoints
+  if (req.path.includes('/terms/current') || req.path.includes('/terms/accept')) {
+    return next();
+  }
+
+  // Skip terms check for super_admin (they don't need to accept)
+  if (req.user && req.user.role === 'super_admin') {
+    return next();
+  }
+
+  // Check if terms are accepted
+  if (req.user && !req.user.termsAccepted) {
+    return res.status(403).json({
+      success: false,
+      message: 'Please accept terms and conditions to continue',
+      requiresTermsAcceptance: true,
+    });
+  }
+
+  next();
 };
 

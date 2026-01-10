@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery } from 'react-query';
 import { useSearchParams } from 'react-router-dom';
-import { getMyProfile, createProfile, updateProfile, uploadPhotos, setPrimaryPhoto, deletePhoto } from '../services/profileService';
+import { getMyProfile, createProfile, updateProfile, uploadPhotos, setPrimaryPhoto, deletePhoto, reorderPhotos } from '../services/profileService';
 import { useAuth } from '../context/AuthContext';
+import { deactivateAccount, deleteAccount, updateContact, updatePrivacySettings, downloadUserData } from '../services/authService';
+import { useNavigate } from 'react-router-dom';
 import { getImageUrl } from '../config/api';
 import toast from 'react-hot-toast';
 import { indianStates, stateCities, countries } from '../utils/indianLocations';
@@ -27,9 +29,27 @@ const Profile = () => {
     photos: false,
     preferences: false,
   });
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const autoSaveTimerRef = useRef(null);
   const hasInitialDataRef = useRef(false);
+  const [showAccountSettings, setShowAccountSettings] = useState(false);
+  const [showDeactivateModal, setShowDeactivateModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [showContactModal, setShowContactModal] = useState(false);
+  const [deactivateReason, setDeactivateReason] = useState('');
+  const [deletePassword, setDeletePassword] = useState('');
+  const [exportData, setExportData] = useState(false);
+  const [newEmail, setNewEmail] = useState('');
+  const [newPhone, setNewPhone] = useState('');
+  const [contactPassword, setContactPassword] = useState('');
+  const [privacySettings, setPrivacySettings] = useState({
+    showEmail: false,
+    showPhone: false,
+    showProfileInSearch: true,
+    allowProfileViews: true,
+  });
 
   const { data, isLoading, refetch } = useQuery('myProfile', getMyProfile);
 
@@ -1436,18 +1456,86 @@ const Profile = () => {
                 </p>
               </div>
             </div>
-            <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <p><strong>Education:</strong> {profile.education?.highestEducation || 'N/A'}</p>
-                <p><strong>Occupation:</strong> {profile.career?.occupation || 'N/A'}</p>
-                <p><strong>Religion:</strong> {profile.religion?.religion || 'N/A'}</p>
-                <p><strong>Caste:</strong> {profile.religion?.caste || 'N/A'}</p>
+            <div className="mt-6">
+              <div className="mb-4 flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm text-gray-600">Profile Visibility:</span>
+                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                    profile.isVisible !== false
+                      ? 'bg-green-100 text-green-800'
+                      : 'bg-gray-100 text-gray-800'
+                  }`}>
+                    {profile.isVisible !== false ? 'Visible in Search' : 'Hidden from Search'}
+                  </span>
+                </div>
+                <button
+                  onClick={async () => {
+                    try {
+                      const newVisibility = !(profile.isVisible !== false);
+                      await updateProfile(profile._id, { isVisible: newVisibility });
+                      toast.success(`Profile ${newVisibility ? 'shown' : 'hidden'} in search`);
+                      refetch();
+                    } catch (error) {
+                      toast.error(error.response?.data?.message || 'Failed to update visibility');
+                    }
+                  }}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    profile.isVisible !== false
+                      ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      : 'bg-green-600 text-white hover:bg-green-700'
+                  }`}
+                >
+                  {profile.isVisible !== false ? 'Hide from Search' : 'Show in Search'}
+                </button>
               </div>
-              <div>
-                <p><strong>Marital Status:</strong> {profile.personalInfo?.maritalStatus || 'N/A'}</p>
-                <p><strong>Eating Habits:</strong> {profile.personalInfo?.eatingHabits || 'N/A'}</p>
-                <p><strong>Family Type:</strong> {profile.familyInfo?.familyType || 'N/A'}</p>
-                <p><strong>Family Status:</strong> {profile.familyInfo?.familyStatus || 'N/A'}</p>
+              {/* Verification Status and Rejection Reason */}
+              <div className="mt-4 mb-4">
+                <div className="flex items-center space-x-2 mb-2">
+                  <span className="text-sm text-gray-600">Verification Status:</span>
+                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                    profile.verificationStatus === 'approved'
+                      ? 'bg-green-100 text-green-800'
+                      : profile.verificationStatus === 'rejected'
+                      ? 'bg-red-100 text-red-800'
+                      : 'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {profile.verificationStatus === 'approved' ? '✓ Verified' : profile.verificationStatus === 'rejected' ? '✗ Rejected' : '⏳ Pending'}
+                  </span>
+                </div>
+                {profile.verificationStatus === 'rejected' && profile.rejectionReason && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                    <p className="text-sm font-semibold text-red-800 mb-1">Rejection Reason:</p>
+                    <p className="text-sm text-red-700 mb-3">{profile.rejectionReason}</p>
+                    <button
+                      onClick={async () => {
+                        try {
+                          await updateProfile(profile._id, { verificationStatus: 'pending', rejectionReason: undefined });
+                          toast.success('Verification re-applied successfully!');
+                          refetch();
+                        } catch (error) {
+                          toast.error(error.response?.data?.message || 'Failed to re-apply verification');
+                        }
+                      }}
+                      className="px-4 py-2 bg-red-600 text-white text-sm rounded-md hover:bg-red-700"
+                    >
+                      Re-apply for Verification
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <p><strong>Education:</strong> {profile.education?.highestEducation || 'N/A'}</p>
+                  <p><strong>Occupation:</strong> {profile.career?.occupation || 'N/A'}</p>
+                  <p><strong>Religion:</strong> {profile.religion?.religion || 'N/A'}</p>
+                  <p><strong>Caste:</strong> {profile.religion?.caste || 'N/A'}</p>
+                </div>
+                <div>
+                  <p><strong>Marital Status:</strong> {profile.personalInfo?.maritalStatus || 'N/A'}</p>
+                  <p><strong>Eating Habits:</strong> {profile.personalInfo?.eatingHabits || 'N/A'}</p>
+                  <p><strong>Family Type:</strong> {profile.familyInfo?.familyType || 'N/A'}</p>
+                  <p><strong>Family Status:</strong> {profile.familyInfo?.familyStatus || 'N/A'}</p>
+                </div>
               </div>
             </div>
           </div>

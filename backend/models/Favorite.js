@@ -12,6 +12,14 @@ const favoriteSchema = new mongoose.Schema(
       ref: 'Profile',
       required: true,
     },
+    notes: {
+      type: String,
+      default: '',
+    },
+    category: {
+      type: String,
+      default: 'general',
+    },
   },
   {
     timestamps: true,

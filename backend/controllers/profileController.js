@@ -42,6 +42,16 @@ export const createOrUpdateProfile = async (req, res) => {
     let profile = await Profile.findOne({ userId });
 
     if (profile) {
+      // Prevent users from editing vendor-created profiles (unless they are the vendor)
+      if (profile.isVendorCreated && req.user.role === 'user') {
+        if (profile.createdBy?.toString() !== req.user.id.toString()) {
+          return res.status(403).json({
+            success: false,
+            message: 'You cannot edit this profile. It was created by a vendor. Please contact the vendor for updates.',
+          });
+        }
+      }
+
       // Update existing profile
       Object.keys(profileData).forEach((key) => {
         if (profileData[key] !== undefined && key !== 'preferences' && key !== 'verificationStatus' && key !== 'verifiedBy' && key !== 'verifiedAt' && key !== 'rejectionReason') {
@@ -141,10 +151,15 @@ export const createOrUpdateProfile = async (req, res) => {
         }
       }
 
+      // Determine if this is vendor-created or user-created
+      const isVendorCreated = req.user.role === 'vendor' || req.user.role === 'super_admin';
+      
       // Create new profile with pending verification status
       profile = await Profile.create({
         userId,
         ...profileData,
+        createdBy: userId, // Set createdBy to the user creating it (vendor or regular user)
+        isVendorCreated: isVendorCreated,
         verificationStatus: 'pending', // New profiles start as pending
       });
     }
@@ -203,6 +218,14 @@ export const getProfileById = async (req, res) => {
       });
     }
 
+    // Exclude deleted profiles (unless it's the user's own profile)
+    if (profile.deletedAt && profile.userId?._id?.toString() !== req.user.id?.toString()) {
+      return res.status(404).json({
+        success: false,
+        message: 'Profile not found',
+      });
+    }
+
     // Increment profile views
     profile.profileViews += 1;
     await profile.save();
@@ -243,7 +266,36 @@ export const uploadPhotos = async (req, res) => {
       });
     }
 
+    // Validate file count (max 10 photos per profile)
+    const MAX_PHOTOS = 10;
     let profile = await Profile.findOne({ userId: req.user.id });
+    
+    const currentPhotoCount = profile?.photos?.length || 0;
+    const newPhotoCount = req.files.length;
+    const totalPhotoCount = currentPhotoCount + newPhotoCount;
+    
+    if (totalPhotoCount > MAX_PHOTOS) {
+      return res.status(400).json({
+        success: false,
+        message: `Maximum ${MAX_PHOTOS} photos allowed. You currently have ${currentPhotoCount} photos and trying to add ${newPhotoCount}. Please remove some photos first.`,
+      });
+    }
+
+    // Validate file types and sizes
+    for (const file of req.files) {
+      if (!file.mimetype.startsWith('image/')) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid file type: ${file.originalname}. Only image files are allowed.`,
+        });
+      }
+      if (file.size > 10 * 1024 * 1024) { // 10MB
+        return res.status(400).json({
+          success: false,
+          message: `File too large: ${file.originalname}. Maximum file size is 10MB.`,
+        });
+      }
+    }
 
     // If profile doesn't exist, create a basic one first
     if (!profile) {
@@ -302,6 +354,51 @@ export const uploadPhotos = async (req, res) => {
       success: true,
       photos: uploadedPhotos,
       profile,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Delete or deactivate own profile
+// @route   DELETE /api/profiles/:id
+// @access  Private
+export const deleteProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const profileId = req.params.id;
+
+    const profile = await Profile.findOne({ _id: profileId, userId });
+
+    if (!profile) {
+      return res.status(404).json({
+        success: false,
+        message: 'Profile not found or you do not have permission to delete it',
+      });
+    }
+
+    // Check if profile is vendor-created
+    if (profile.isVendorCreated) {
+      return res.status(403).json({
+        success: false,
+        message: 'Cannot delete vendor-created profile. Please contact the vendor.',
+      });
+    }
+
+    // Soft delete: Set isActive to false instead of hard delete
+    profile.isActive = false;
+    await profile.save();
+
+    // Also deactivate user account
+    const User = (await import('../models/User.js')).default;
+    await User.findByIdAndUpdate(userId, { isActive: false });
+
+    res.status(200).json({
+      success: true,
+      message: 'Profile deactivated successfully',
     });
   } catch (error) {
     res.status(500).json({
@@ -386,6 +483,61 @@ export const setPrimaryPhoto = async (req, res) => {
       photo.isPrimary = true;
     }
 
+    await profile.save();
+
+    res.status(200).json({
+      success: true,
+      profile,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Reorder photos
+// @route   PUT /api/profiles/photos/reorder
+// @access  Private
+export const reorderPhotos = async (req, res) => {
+  try {
+    const { photoIds } = req.body; // Array of photo IDs in the desired order
+
+    if (!Array.isArray(photoIds) || photoIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide an array of photo IDs in the desired order',
+      });
+    }
+
+    const profile = await Profile.findOne({ userId: req.user.id });
+
+    if (!profile) {
+      return res.status(404).json({
+        success: false,
+        message: 'Profile not found',
+      });
+    }
+
+    // Validate that all photo IDs belong to this profile
+    const profilePhotoIds = profile.photos.map(p => p._id.toString());
+    const invalidIds = photoIds.filter(id => !profilePhotoIds.includes(id.toString()));
+    
+    if (invalidIds.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Some photo IDs do not belong to your profile',
+      });
+    }
+
+    // Reorder photos based on the provided order
+    const reorderedPhotos = photoIds.map(id => {
+      return profile.photos.id(id);
+    }).filter(Boolean);
+
+    // Update the photos array
+    profile.photos = reorderedPhotos;
     await profile.save();
 
     res.status(200).json({

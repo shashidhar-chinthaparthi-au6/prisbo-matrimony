@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import * as ImagePicker from 'expo-image-picker';
-import { getPlans, getCurrentSubscription, getSubscriptionHistory, subscribe, upgradeSubscription, uploadPaymentProof, getInvoice } from '../services/subscriptionService';
+import { getPlans, getCurrentSubscription, getSubscriptionHistory, subscribe, upgradeSubscription, uploadPaymentProof, getInvoice, pauseSubscription, resumeSubscription, exportPaymentHistory } from '../services/subscriptionService';
 
 const SubscriptionScreen = ({ navigation }) => {
   const [selectedPlan, setSelectedPlan] = useState(null);
@@ -269,6 +269,98 @@ const SubscriptionScreen = ({ navigation }) => {
               Rejection reason: {currentSubscription.rejectionReason}
             </Text>
           )}
+          
+          {/* Pause/Resume Subscription */}
+          {hasActiveSubscription && currentSubscription && (
+            <View style={styles.actionButtonsContainer}>
+              {currentSubscription.isPaused ? (
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.resumeButton]}
+                  onPress={async () => {
+                    try {
+                      await resumeSubscription();
+                      Alert.alert('Success', 'Subscription resumed successfully');
+                      queryClient.invalidateQueries('current-subscription');
+                    } catch (error) {
+                      Alert.alert('Error', error.response?.data?.message || 'Failed to resume subscription');
+                    }
+                  }}
+                >
+                  <Text style={styles.actionButtonText}>▶️ Resume Subscription</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.pauseButton]}
+                  onPress={async () => {
+                    Alert.alert(
+                      'Pause Subscription',
+                      'Are you sure you want to pause your subscription? It will be extended by the remaining days.',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Pause',
+                          onPress: async () => {
+                            try {
+                              await pauseSubscription();
+                              Alert.alert('Success', 'Subscription paused successfully');
+                              queryClient.invalidateQueries('current-subscription');
+                            } catch (error) {
+                              Alert.alert('Error', error.response?.data?.message || 'Failed to pause subscription');
+                            }
+                          },
+                        },
+                      ]
+                    );
+                  }}
+                >
+                  <Text style={styles.actionButtonText}>⏸️ Pause Subscription</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+        </View>
+      )}
+      
+      {/* Plan Comparison Table */}
+      {plansData?.plans && plansData.plans.length > 0 && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Plan Comparison</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View>
+              <View style={styles.comparisonHeader}>
+                <Text style={styles.comparisonHeaderText}>Feature</Text>
+                {plansData.plans.map(plan => (
+                  <Text key={plan._id} style={styles.comparisonHeaderText}>
+                    {plan.name}
+                  </Text>
+                ))}
+              </View>
+              <View style={styles.comparisonRow}>
+                <Text style={styles.comparisonLabel}>Price</Text>
+                {plansData.plans.map(plan => (
+                  <Text key={plan._id} style={styles.comparisonValue}>
+                    ₹{plan.price}
+                  </Text>
+                ))}
+              </View>
+              <View style={styles.comparisonRow}>
+                <Text style={styles.comparisonLabel}>Duration</Text>
+                {plansData.plans.map(plan => (
+                  <Text key={plan._id} style={styles.comparisonValue}>
+                    {plan.duration} days
+                  </Text>
+                ))}
+              </View>
+              <View style={styles.comparisonRow}>
+                <Text style={styles.comparisonLabel}>Daily Rate</Text>
+                {plansData.plans.map(plan => (
+                  <Text key={plan._id} style={styles.comparisonValue}>
+                    ₹{(plan.price / plan.duration).toFixed(2)}/day
+                  </Text>
+                ))}
+              </View>
+            </View>
+          </ScrollView>
         </View>
       )}
 
@@ -817,11 +909,28 @@ const SubscriptionScreen = ({ navigation }) => {
       <View style={styles.card}>
         <View style={styles.historyHeader}>
           <Text style={styles.cardTitle}>Subscription History</Text>
-          <TouchableOpacity onPress={() => setShowHistory(!showHistory)}>
-            <Text style={styles.historyToggle}>
-              {showHistory ? 'Hide' : 'Show'} History
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.historyActions}>
+            {showHistory && historyData?.subscriptions?.length > 0 && (
+              <TouchableOpacity
+                style={styles.exportButton}
+                onPress={async () => {
+                  try {
+                    await exportPaymentHistory();
+                    Alert.alert('Success', 'Payment history exported successfully');
+                  } catch (error) {
+                    Alert.alert('Error', 'Failed to export payment history');
+                  }
+                }}
+              >
+                <Text style={styles.exportButtonText}>📥 Export</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity onPress={() => setShowHistory(!showHistory)}>
+              <Text style={styles.historyToggle}>
+                {showHistory ? 'Hide' : 'Show'} History
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {showHistory && (
@@ -1183,6 +1292,81 @@ const styles = StyleSheet.create({
   },
   infoBold: {
     fontWeight: 'bold',
+  },
+  historyHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  historyActions: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+  },
+  exportButton: {
+    backgroundColor: '#10b981',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  exportButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  actionButtonsContainer: {
+    marginTop: 15,
+  },
+  actionButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  pauseButton: {
+    backgroundColor: '#ea580c',
+  },
+  resumeButton: {
+    backgroundColor: '#10b981',
+  },
+  actionButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  comparisonHeader: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+    paddingBottom: 10,
+    marginBottom: 10,
+  },
+  comparisonHeaderText: {
+    flex: 1,
+    fontWeight: 'bold',
+    fontSize: 14,
+    textAlign: 'center',
+    paddingHorizontal: 10,
+  },
+  comparisonRow: {
+    flexDirection: 'row',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  comparisonLabel: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    paddingHorizontal: 10,
+  },
+  comparisonValue: {
+    flex: 1,
+    fontSize: 14,
+    textAlign: 'center',
+    paddingHorizontal: 10,
   },
 });
 

@@ -8,6 +8,15 @@ const profileSchema = new mongoose.Schema(
       required: true,
       unique: true,
     },
+    // Track who created this profile (vendor/admin or user themselves)
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    isVendorCreated: {
+      type: Boolean,
+      default: false,
+    },
     type: {
       type: String,
       enum: ['bride', 'groom'],
@@ -95,6 +104,10 @@ const profileSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    isVisible: {
+      type: Boolean,
+      default: true, // Show in search by default
+    },
     isPremium: {
       type: Boolean,
       default: false,
@@ -127,6 +140,15 @@ const profileSchema = new mongoose.Schema(
     rejectionReason: {
       type: String,
     },
+    // Soft delete
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
+    deletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
   },
   {
     timestamps: true,
@@ -157,6 +179,9 @@ profileSchema.index({ isActive: 1 });
 profileSchema.index({ createdAt: -1 });
 profileSchema.index({ verificationStatus: 1 });
 profileSchema.index({ verificationStatus: 1, createdAt: -1 });
+profileSchema.index({ createdBy: 1 });
+profileSchema.index({ createdBy: 1, createdAt: -1 });
+profileSchema.index({ deletedAt: 1 });
 
 export default mongoose.model('Profile', profileSchema);
 

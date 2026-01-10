@@ -5,8 +5,14 @@ import {
   getSubscriptionHistory,
   subscribe,
   upgradeSubscription,
+  downgradeSubscription,
   uploadPaymentProof,
   getInvoice,
+  toggleAutoRenew,
+  retryPayment,
+  pauseSubscription,
+  resumeSubscription,
+  exportPaymentHistory,
 } from '../controllers/subscriptionController.js';
 import { protect } from '../middleware/auth.js';
 import { uploadSingle } from '../middleware/upload.js';
@@ -20,6 +26,12 @@ router.get('/current', getCurrentSubscription);
 router.get('/history', getSubscriptionHistory);
 router.post('/subscribe', subscribe);
 router.post('/upgrade', upgradeSubscription);
+router.post('/downgrade', downgradeSubscription);
+router.put('/auto-renew', toggleAutoRenew);
+router.post('/:id/retry-payment', retryPayment);
+router.post('/pause', pauseSubscription);
+router.post('/resume', resumeSubscription);
+router.get('/history/export', exportPaymentHistory);
 router.post('/upload-proof', uploadSingle, uploadPaymentProof);
 router.get('/:id/invoice', getInvoice);
 

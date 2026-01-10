@@ -5,26 +5,42 @@ import Layout from './components/Layout';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import Profile from './pages/Profile';
 import ProfileDetail from './pages/ProfileDetail';
+import VendorDetail from './pages/VendorDetail';
 import Search from './pages/Search';
 import Interests from './pages/Interests';
 import Favorites from './pages/Favorites';
 import Chats from './pages/Chats';
 import Notifications from './pages/Notifications';
 import Admin from './pages/Admin';
+import VendorDashboard from './pages/VendorDashboard';
 import Subscription from './pages/Subscription';
+import TermsAndConditions from './pages/TermsAndConditions';
+import NotFound from './pages/NotFound';
 
 const AppRoutes = () => {
   const { user } = useAuth();
 
-  // If admin, show admin dashboard for all protected routes
-  if (user?.role === 'admin') {
+  // If super_admin, show admin dashboard
+  if (user?.role === 'super_admin') {
     return (
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password/:resettoken" element={<ResetPassword />} />
+        <Route
+          path="/terms"
+          element={
+            <ProtectedRoute>
+              <TermsAndConditions />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/admin"
           element={
@@ -34,13 +50,68 @@ const AppRoutes = () => {
           }
         />
         <Route
-          path="/*"
+          path="/profile"
           element={
             <ProtectedRoute>
-              <Navigate to="/admin" replace />
+              <Profile />
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/profiles/:id"
+          element={
+            <ProtectedRoute>
+              <ProfileDetail />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/vendors/:id"
+          element={
+            <ProtectedRoute>
+              <VendorDetail />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/*" element={<NotFound />} />
+      </Routes>
+    );
+  }
+
+  // If vendor, show vendor dashboard
+  if (user?.role === 'vendor') {
+    return (
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password/:resettoken" element={<ResetPassword />} />
+        <Route
+          path="/terms"
+          element={
+            <ProtectedRoute>
+              <TermsAndConditions />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/vendor"
+          element={
+            <ProtectedRoute>
+              <VendorDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profiles/:id"
+          element={
+            <ProtectedRoute>
+              <ProfileDetail />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/*" element={<NotFound />} />
       </Routes>
     );
   }
@@ -50,6 +121,16 @@ const AppRoutes = () => {
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password/:resettoken" element={<ResetPassword />} />
+          <Route
+            path="/terms"
+            element={
+              <ProtectedRoute>
+                <TermsAndConditions />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/search"
             element={
@@ -114,6 +195,7 @@ const AppRoutes = () => {
           </ProtectedRoute>
         }
       />
+      <Route path="/*" element={<NotFound />} />
         </Routes>
   );
 };

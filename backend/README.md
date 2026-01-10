@@ -31,6 +31,8 @@ npm start
 - `POST /api/auth/register` - Register new user
 - `POST /api/auth/login` - Login user
 - `GET /api/auth/me` - Get current user (Protected)
+- `POST /api/auth/forgotpassword` - Request password reset (sends email)
+- `PUT /api/auth/resetpassword/:resettoken` - Reset password with token
 
 ### Profiles
 - `POST /api/profiles` - Create profile (Protected)
@@ -76,10 +78,14 @@ npm start
 - `MONGODB_URI` - MongoDB connection string
 - `JWT_SECRET` - JWT secret key
 - `JWT_EXPIRE` - JWT expiration time
-- `AWS_ACCESS_KEY_ID` - AWS access key
-- `AWS_SECRET_ACCESS_KEY` - AWS secret key
-- `AWS_REGION` - AWS region
+- `AWS_ACCESS_KEY_ID` - AWS access key (used for both S3 and SES)
+- `AWS_SECRET_ACCESS_KEY` - AWS secret key (used for both S3 and SES)
+- `AWS_REGION` - AWS region (used for both S3 and SES, default: us-east-1)
 - `S3_BUCKET_NAME` - S3 bucket name
 - `WEB_URL` - Web app URL (for CORS)
 - `MOBILE_URL` - Mobile app URL (for CORS)
+- `FRONTEND_URL` - Frontend URL for password reset links (default: http://localhost:5173)
+- `SES_FROM_EMAIL` or `AWS_SES_FROM_EMAIL` - Verified sender email address in AWS SES
+- `AWS_SES_REGION` - AWS SES region (optional, uses AWS_REGION if not set)
+- `FROM_NAME` - Name to display in email sender (default: Prisbo)
 

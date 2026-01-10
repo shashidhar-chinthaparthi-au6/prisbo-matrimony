@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { getMyProfile, createProfile, updateProfile, uploadPhotos, setPrimaryPhoto, deletePhoto } from '../services/profileService';
 import { useAuth } from '../context/AuthContext';
+import { deactivateAccount, deleteAccount, updateContact, updatePrivacySettings, downloadUserData } from '../services/authService';
 import { getImageUrl } from '../config/api';
 import * as ImagePicker from 'expo-image-picker';
 import Dropdown from '../components/Dropdown';
@@ -26,9 +27,10 @@ const ProfileScreen = ({ route, navigation }) => {
     lifestyle: false,
     photos: false,
   });
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const autoSaveTimerRef = useRef(null);
   const hasInitialDataRef = useRef(false);
+  const [showAccountSettings, setShowAccountSettings] = useState(false);
 
   useEffect(() => {
     loadProfile();
@@ -1223,7 +1225,165 @@ const ProfileScreen = ({ route, navigation }) => {
           </TouchableOpacity>
         </View>
       )}
-    </ScrollView>
+          {/* Account Settings Section */}
+          {!editing && profile && (
+            <View style={styles.section}>
+              <TouchableOpacity
+                onPress={() => setShowAccountSettings(!showAccountSettings)}
+                style={styles.accountSettingsHeader}
+              >
+                <Text style={styles.accountSettingsTitle}>
+                  {showAccountSettings ? '▼' : '▶'} Account Settings
+                </Text>
+              </TouchableOpacity>
+              
+              {showAccountSettings && (
+                <View style={styles.accountSettingsContent}>
+                  <TouchableOpacity
+                    style={styles.accountButton}
+                    onPress={() => {
+                      Alert.prompt(
+                        'Change Email/Phone',
+                        'Enter new email or phone (leave blank to keep current)',
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          {
+                            text: 'Update',
+                            onPress: async (email) => {
+                              Alert.prompt(
+                                'Password Required',
+                                'Enter your password to confirm',
+                                [
+                                  { text: 'Cancel', style: 'cancel' },
+                                  {
+                                    text: 'Update',
+                                    onPress: async (password) => {
+                                      try {
+                                        await updateContact({ email, password });
+                                        Alert.alert('Success', 'Contact information updated');
+                                        loadProfile();
+                                      } catch (error) {
+                                        Alert.alert('Error', error.response?.data?.message || 'Failed to update');
+                                      }
+                                    },
+                                  },
+                                ],
+                                'secure-text'
+                              );
+                            },
+                          },
+                        ],
+                        'plain-text'
+                      );
+                    }}
+                  >
+                    <Text style={styles.accountButtonText}>Change Email/Phone</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[styles.accountButton, { backgroundColor: '#8b5cf6' }]}
+                    onPress={async () => {
+                      try {
+                        const data = await downloadUserData();
+                        Alert.alert('Success', 'User data downloaded. Check your downloads folder.');
+                      } catch (error) {
+                        Alert.alert('Error', error.response?.data?.message || 'Failed to download data');
+                      }
+                    }}
+                  >
+                    <Text style={styles.accountButtonText}>Download My Data</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[styles.accountButton, { backgroundColor: '#f59e0b' }]}
+                    onPress={() => {
+                      Alert.prompt(
+                        'Deactivate Account',
+                        'Enter reason (optional)',
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          {
+                            text: 'Deactivate',
+                            onPress: async (reason) => {
+                              try {
+                                await deactivateAccount(reason);
+                                Alert.alert('Success', 'Account deactivated', [
+                                  {
+                                    text: 'OK',
+                                    onPress: () => {
+                                      logout();
+                                      navigation.navigate('Login');
+                                    },
+                                  },
+                                ]);
+                              } catch (error) {
+                                Alert.alert('Error', error.response?.data?.message || 'Failed to deactivate');
+                              }
+                            },
+                          },
+                        ],
+                        'plain-text'
+                      );
+                    }}
+                  >
+                    <Text style={styles.accountButtonText}>Deactivate Account</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[styles.accountButton, { backgroundColor: '#dc2626' }]}
+                    onPress={() => {
+                      Alert.alert(
+                        'Delete Account',
+                        'This action cannot be undone. All your data will be permanently deleted.',
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          {
+                            text: 'Delete',
+                            style: 'destructive',
+                            onPress: () => {
+                              Alert.prompt(
+                                'Confirm Password',
+                                'Enter your password to confirm deletion',
+                                [
+                                  { text: 'Cancel', style: 'cancel' },
+                                  {
+                                    text: 'Delete',
+                                    style: 'destructive',
+                                    onPress: async (password) => {
+                                      try {
+                                        await deleteAccount(password, false);
+                                        Alert.alert('Success', 'Account deleted', [
+                                          {
+                                            text: 'OK',
+                                            onPress: () => {
+                                              logout();
+                                              navigation.navigate('Login');
+                                            },
+                                          },
+                                        ]);
+                                      } catch (error) {
+                                        Alert.alert('Error', error.response?.data?.message || 'Failed to delete');
+                                      }
+                                    },
+                                  },
+                                ],
+                                'secure-text'
+                              );
+                            },
+                          },
+                        ]
+                      );
+                    }}
+                  >
+                    <Text style={styles.accountButtonText}>Delete Account</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          )}
+        </ScrollView>
+      )}
+    </View>
   );
 };
 
@@ -1532,6 +1692,32 @@ const styles = StyleSheet.create({
     color: '#ef4444',
     marginTop: 8,
     marginBottom: 10,
+    fontWeight: '600',
+  },
+  accountSettingsHeader: {
+    padding: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  accountSettingsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#ef4444',
+  },
+  accountSettingsContent: {
+    padding: 15,
+    paddingTop: 0,
+  },
+  accountButton: {
+    backgroundColor: '#3b82f6',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 10,
+    alignItems: 'center',
+  },
+  accountButtonText: {
+    color: '#fff',
+    fontSize: 14,
     fontWeight: '600',
   },
 });

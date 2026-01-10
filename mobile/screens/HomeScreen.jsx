@@ -1,31 +1,43 @@
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useEffect } from 'react';
+import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import SuperAdminLandingScreen from './SuperAdminLandingScreen';
+import VendorLandingScreen from './VendorLandingScreen';
+import UserLandingScreen from './UserLandingScreen';
 
 const HomeScreen = ({ navigation }) => {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
 
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Welcome to Prisbo</Text>
-      <Text style={styles.subtitle}>Your trusted matrimony platform</Text>
-      {user && (
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity
-            style={styles.button}
-            onPress={() => navigation.navigate('Search')}
-          >
-            <Text style={styles.buttonText}>Start Searching</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.button, styles.buttonSecondary]}
-            onPress={() => navigation.navigate('Profile')}
-          >
-            <Text style={styles.buttonTextSecondary}>View Profile</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </View>
-  );
+  useEffect(() => {
+    // Navigation is handled by App.jsx based on user role
+    // This component just renders the appropriate landing page
+  }, [user]);
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#ef4444" />
+      </View>
+    );
+  }
+
+  if (!user) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>Welcome to Prisbo</Text>
+        <Text style={styles.subtitle}>Your trusted matrimony platform</Text>
+      </View>
+    );
+  }
+
+  // Render role-specific landing pages
+  if (user.role === 'super_admin') {
+    return <SuperAdminLandingScreen />;
+  } else if (user.role === 'vendor') {
+    return <VendorLandingScreen />;
+  } else {
+    return <UserLandingScreen />;
+  }
 };
 
 const styles = StyleSheet.create({

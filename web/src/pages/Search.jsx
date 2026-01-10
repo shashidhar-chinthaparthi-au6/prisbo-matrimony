@@ -10,24 +10,42 @@ import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import SubscriptionRequiredModal from '../components/SubscriptionRequiredModal';
 import ProfileIncompleteModal from '../components/ProfileIncompleteModal';
+import LoadingSkeleton from '../components/LoadingSkeleton';
 import { isProfileComplete } from '../utils/profileUtils';
 
 const Search = () => {
   const navigate = useNavigate();
-  const [filters, setFilters] = useState({
-    minAge: '',
-    maxAge: '',
-    city: '',
-    state: '',
-    education: '',
-    occupation: '',
-    religion: '',
-    caste: '',
-    page: 1,
-  });
+  
+  // Load saved search preferences from localStorage
+  const loadSavedPreferences = () => {
+    try {
+      const saved = localStorage.getItem('searchPreferences');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return { ...parsed, page: 1 }; // Reset page when loading saved preferences
+      }
+    } catch (error) {
+      console.error('Failed to load search preferences:', error);
+    }
+    return {
+      name: '',
+      minAge: '',
+      maxAge: '',
+      city: '',
+      state: '',
+      education: '',
+      occupation: '',
+      religion: '',
+      caste: '',
+      page: 1,
+    };
+  };
+
+  const [filters, setFilters] = useState(loadSavedPreferences);
   const [showFilters, setShowFilters] = useState(false);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [showProfileIncompleteModal, setShowProfileIncompleteModal] = useState(false);
+  const [savedSearches, setSavedSearches] = useState([]);
 
   const { data: profileData } = useQuery('myProfile', getMyProfile);
   const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
@@ -82,8 +100,65 @@ const Search = () => {
   };
 
   const handleFilterChange = (key, value) => {
-    setFilters({ ...filters, [key]: value, page: 1 });
+    const newFilters = { ...filters, [key]: value, page: 1 };
+    setFilters(newFilters);
+    // Auto-save search preferences
+    try {
+      const { page, ...preferences } = newFilters;
+      localStorage.setItem('searchPreferences', JSON.stringify(preferences));
+    } catch (error) {
+      console.error('Failed to save search preferences:', error);
+    }
   };
+
+  const handleSaveSearch = () => {
+    const searchName = prompt('Enter a name for this search:');
+    if (searchName) {
+      try {
+        const saved = JSON.parse(localStorage.getItem('savedSearches') || '[]');
+        const { page, ...preferences } = filters;
+        const newSearch = {
+          id: Date.now(),
+          name: searchName,
+          filters: preferences,
+          createdAt: new Date().toISOString(),
+        };
+        saved.push(newSearch);
+        localStorage.setItem('savedSearches', JSON.stringify(saved));
+        setSavedSearches(saved);
+        toast.success('Search saved successfully!');
+      } catch (error) {
+        toast.error('Failed to save search');
+      }
+    }
+  };
+
+  const handleLoadSavedSearch = (savedSearch) => {
+    setFilters({ ...savedSearch.filters, page: 1 });
+    toast.success(`Loaded search: ${savedSearch.name}`);
+  };
+
+  const handleDeleteSavedSearch = (id) => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('savedSearches') || '[]');
+      const filtered = saved.filter(s => s.id !== id);
+      localStorage.setItem('savedSearches', JSON.stringify(filtered));
+      setSavedSearches(filtered);
+      toast.success('Search deleted');
+    } catch (error) {
+      toast.error('Failed to delete search');
+    }
+  };
+
+  // Load saved searches on mount
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('savedSearches') || '[]');
+      setSavedSearches(saved);
+    } catch (error) {
+      console.error('Failed to load saved searches:', error);
+    }
+  }, []);
 
   const handleChat = async (userId) => {
     try {
@@ -132,6 +207,18 @@ const Search = () => {
       {showFilters && (
         <div className="bg-white p-6 rounded-lg shadow mb-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="md:col-span-2 lg:col-span-3">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Search by Name/Keyword
+              </label>
+              <input
+                type="text"
+                value={filters.name}
+                onChange={(e) => handleFilterChange('name', e.target.value)}
+                placeholder="Enter name or keyword to search..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              />
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Min Age
@@ -220,6 +307,61 @@ const Search = () => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md"
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Verification Status
+              </label>
+              <select
+                value={filters.verificationStatus}
+                onChange={(e) => handleFilterChange('verificationStatus', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              >
+                <option value="">All</option>
+                <option value="approved">Verified Only</option>
+                <option value="pending">Pending</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Min Income (Lakhs)
+              </label>
+              <input
+                type="number"
+                value={filters.minIncome}
+                onChange={(e) => handleFilterChange('minIncome', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                placeholder="e.g., 5"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Max Income (Lakhs)
+              </label>
+              <input
+                type="number"
+                value={filters.maxIncome}
+                onChange={(e) => handleFilterChange('maxIncome', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                placeholder="e.g., 20"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Sort By
+              </label>
+              <select
+                value={filters.sortBy}
+                onChange={(e) => handleFilterChange('sortBy', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              >
+                <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+                <option value="ageAsc">Age: Low to High</option>
+                <option value="ageDesc">Age: High to Low</option>
+                <option value="location">Location</option>
+                <option value="name">Name (A-Z)</option>
+              </select>
+            </div>
           </div>
           <div className="mt-4">
             <button
@@ -248,15 +390,18 @@ const Search = () => {
           </div>
         </div>
       ) : isLoading ? (
-        <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <LoadingSkeleton type="card" count={6} />
         </div>
       ) : data?.profiles?.length > 0 ? (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {data.profiles.map((profile) => (
-              <div key={profile._id} className="bg-white rounded-lg shadow overflow-hidden">
-                <div className="h-48 bg-gray-200 relative">
+              <div key={profile._id} className="bg-white rounded-lg shadow overflow-hidden cursor-pointer hover:shadow-lg transition-shadow">
+                <div 
+                  className="h-48 bg-gray-200 relative cursor-pointer"
+                  onClick={() => handleViewProfile(profile._id)}
+                >
                   {profile.photos?.[0]?.url ? (
                     <img
                       src={getImageUrl(profile.photos[0].url)}
@@ -270,7 +415,10 @@ const Search = () => {
                   )}
                 </div>
                 <div className="p-4">
-                  <h3 className="font-semibold text-lg">
+                  <h3 
+                    className="font-semibold text-lg cursor-pointer hover:text-primary-600 transition-colors"
+                    onClick={() => handleViewProfile(profile._id)}
+                  >
                     {profile.personalInfo?.firstName} {profile.personalInfo?.lastName}
                   </h3>
                   <p className="text-gray-600 text-sm">
@@ -285,7 +433,10 @@ const Search = () => {
                     </button>
                     {profile.interestStatus === 'accepted' && (
                       <button
-                        onClick={() => handleChat(profile.userId._id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleChat(profile.userId._id);
+                        }}
                         className="text-primary-600 hover:text-primary-700 text-sm font-medium"
                       >
                         Chat →
@@ -297,27 +448,82 @@ const Search = () => {
             ))}
           </div>
           {data.pagination && (
-            <div className="mt-6 flex justify-center space-x-2">
-              <button
-                onClick={() => setFilters({ ...filters, page: filters.page - 1 })}
-                disabled={filters.page === 1}
-                className="px-4 py-2 bg-gray-200 rounded-md disabled:opacity-50"
-              >
-                Previous
-              </button>
-              <span className="px-4 py-2">
-                Page {data.pagination.page} of {data.pagination.pages}
-              </span>
-              <button
-                onClick={() => setFilters({ ...filters, page: filters.page + 1 })}
-                disabled={filters.page >= data.pagination.pages}
-                className="px-4 py-2 bg-gray-200 rounded-md disabled:opacity-50"
-              >
-                Next
-              </button>
+            <div className="mt-6 flex flex-col items-center space-y-4">
+              <div className="flex justify-center space-x-2">
+                <button
+                  onClick={() => setFilters({ ...filters, page: filters.page - 1 })}
+                  disabled={filters.page === 1}
+                  className="px-4 py-2 bg-gray-200 rounded-md disabled:opacity-50 hover:bg-gray-300 transition-colors"
+                >
+                  Previous
+                </button>
+                <span className="px-4 py-2 flex items-center">
+                  Page {data.pagination.page} of {data.pagination.pages}
+                </span>
+                <button
+                  onClick={() => setFilters({ ...filters, page: filters.page + 1 })}
+                  disabled={filters.page >= data.pagination.pages}
+                  className="px-4 py-2 bg-gray-200 rounded-md disabled:opacity-50 hover:bg-gray-300 transition-colors"
+                >
+                  Next
+                </button>
+              </div>
+              {data.pagination.pages > 1 && (
+                <button
+                  onClick={() => {
+                    const nextPage = filters.page + 1;
+                    if (nextPage <= data.pagination.pages) {
+                      setFilters({ ...filters, page: nextPage });
+                    }
+                  }}
+                  disabled={filters.page >= data.pagination.pages}
+                  className="px-6 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Load More
+                </button>
+              )}
             </div>
           )}
         </>
+      ) : data?.profiles?.length === 0 ? (
+        <div className="text-center py-12">
+          <div className="bg-white rounded-lg shadow p-8 max-w-md mx-auto">
+            <div className="text-6xl mb-4">🔍</div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">No Profiles Found</h2>
+            <p className="text-gray-600 mb-4">
+              We couldn't find any profiles matching your search criteria.
+            </p>
+            <div className="text-sm text-gray-500 mb-6 space-y-1">
+              <p>Try:</p>
+              <ul className="list-disc list-inside text-left max-w-xs mx-auto">
+                <li>Adjusting your filters</li>
+                <li>Removing some search criteria</li>
+                <li>Searching with a different keyword</li>
+                <li>Checking your spelling</li>
+              </ul>
+            </div>
+            <button
+              onClick={() => {
+                setFilters({
+                  name: '',
+                  minAge: '',
+                  maxAge: '',
+                  city: '',
+                  state: '',
+                  education: '',
+                  occupation: '',
+                  religion: '',
+                  caste: '',
+                  page: 1,
+                });
+                refetch();
+              }}
+              className="inline-block px-6 py-3 bg-primary-600 text-white rounded-md hover:bg-primary-700 font-medium"
+            >
+              Clear Filters & Search Again
+            </button>
+          </div>
+        </div>
       ) : data?.message ? (
         <div className="text-center py-12">
           <div className="bg-white rounded-lg shadow p-8 max-w-md mx-auto">
@@ -331,8 +537,43 @@ const Search = () => {
           </div>
         </div>
       ) : (
-        <div className="text-center py-12 text-gray-500">
-          No profiles found. Try adjusting your filters.
+        <div className="text-center py-12">
+          <div className="bg-white rounded-lg shadow p-8 max-w-md mx-auto">
+            <div className="text-6xl mb-4">🔍</div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">No Profiles Found</h2>
+            <p className="text-gray-600 mb-6">
+              We couldn't find any profiles matching your search criteria. Try:
+            </p>
+            <ul className="text-left text-gray-600 mb-6 space-y-2">
+              <li>• Adjusting your age range</li>
+              <li>• Expanding your location filters</li>
+              <li>• Removing some filters to see more results</li>
+              <li>• Trying different search terms</li>
+            </ul>
+            <button
+              onClick={() => {
+                setFilters({
+                  minAge: '',
+                  maxAge: '',
+                  city: '',
+                  state: '',
+                  education: '',
+                  occupation: '',
+                  religion: '',
+                  caste: '',
+                  verificationStatus: '',
+                  minIncome: '',
+                  maxIncome: '',
+                  sortBy: 'newest',
+                  page: 1,
+                });
+                setTimeout(() => refetch(), 100);
+              }}
+              className="px-6 py-3 bg-primary-600 text-white rounded-md hover:bg-primary-700 font-medium"
+            >
+              Clear Filters & Search Again
+            </button>
+          </div>
         </div>
       )}
 

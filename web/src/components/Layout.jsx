@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useQuery } from 'react-query';
 import { getNotifications } from '../services/notificationService';
+import Breadcrumb from './Breadcrumb';
 
 const Layout = ({ children }) => {
   const { user, logout } = useAuth();
@@ -12,13 +13,14 @@ const Layout = ({ children }) => {
     () => getNotifications({ limit: 1, unreadOnly: true }),
     {
       enabled: !!user,
-      refetchInterval: 10000, // Refresh every 10 seconds
+      refetchInterval: 15000, // Refresh every 15 seconds (reduced frequency to avoid rate limits)
+      retry: false, // Don't retry on rate limit errors
     }
   );
 
   const unreadCount = notificationsData?.unreadCount || 0;
 
-  const navItems = user?.role === 'admin' 
+  const navItems = user?.role === 'super_admin' 
     ? [
         { path: '/', label: 'Home', icon: '🏠' },
         { path: '/admin', label: 'Admin', icon: '⚙️' },
@@ -35,15 +37,19 @@ const Layout = ({ children }) => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Skip to main content for accessibility */}
+      <a href="#main-content" className="skip-to-main">
+        Skip to main content
+      </a>
       {/* Header */}
-      <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <header className="bg-white shadow-sm sticky top-0 z-50" role="banner">
+        <div className="w-full px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <Link to="/" className="flex flex-col items-start">
               <span className="text-2xl font-bold text-primary-600">Prisbo</span>
               <span className="text-xs text-gray-600 -mt-1">Matrimony</span>
             </Link>
-            <nav className="hidden md:flex space-x-8">
+            <nav className="hidden md:flex space-x-8" role="navigation" aria-label="Main navigation">
               {navItems.map((item) => (
                 <Link
                   key={item.path}
@@ -53,6 +59,7 @@ const Layout = ({ children }) => {
                       ? 'text-primary-600 bg-primary-50'
                       : 'text-gray-700 hover:text-primary-600'
                   }`}
+                  aria-current={location.pathname === item.path ? 'page' : undefined}
                 >
                   {item.label}
                 </Link>
@@ -130,7 +137,8 @@ const Layout = ({ children }) => {
       </nav>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-20 md:pb-8">
+      <main id="main-content" className="w-full px-4 sm:px-6 lg:px-8 py-8 pb-20 md:pb-8" role="main">
+        <Breadcrumb />
         {children}
       </main>
     </div>

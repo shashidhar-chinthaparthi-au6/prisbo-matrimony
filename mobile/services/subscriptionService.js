@@ -47,3 +47,22 @@ export const getInvoice = async (subscriptionId) => {
   return response.data;
 };
 
+export const pauseSubscription = async () => {
+  const response = await api.post('/subscriptions/pause');
+  return response.data;
+};
+
+export const resumeSubscription = async () => {
+  const response = await api.post('/subscriptions/resume');
+  return response.data;
+};
+
+export const exportPaymentHistory = async () => {
+  const response = await api.get('/subscriptions/history/export', {
+    responseType: 'blob',
+  });
+  // For mobile, we'll show the data in an alert or copy to clipboard
+  // In a real app, you might want to use a library like react-native-fs to save the file
+  return response.data;
+};
+

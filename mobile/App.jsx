@@ -14,7 +14,17 @@ import NotificationsScreen from './screens/NotificationsScreen';
 import InterestsScreen from './screens/InterestsScreen';
 import FavoritesScreen from './screens/FavoritesScreen';
 import AdminScreen from './screens/AdminScreen';
+import VendorDashboardScreen from './screens/VendorDashboardScreen';
+import VendorDetailScreen from './screens/VendorDetailScreen';
+import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
+import ResetPasswordScreen from './screens/ResetPasswordScreen';
 import SubscriptionScreen from './screens/SubscriptionScreen';
+import TermsAndConditionsScreen from './screens/TermsAndConditionsScreen';
+import SuperAdminLandingScreen from './screens/SuperAdminLandingScreen';
+import VendorLandingScreen from './screens/VendorLandingScreen';
+import UserLandingScreen from './screens/UserLandingScreen';
+import NotFoundScreen from './screens/NotFoundScreen';
+import ErrorBoundary from './components/ErrorBoundary';
 import { ActivityIndicator, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useEffect, useState } from 'react';
 import { getNotifications } from './services/notificationService';
@@ -191,6 +201,16 @@ const AuthStack = () => {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Register" component={RegisterScreen} />
+      <Stack.Screen 
+        name="ForgotPassword" 
+        component={ForgotPasswordScreen}
+        options={{ title: 'Forgot Password', headerShown: true }}
+      />
+      <Stack.Screen 
+        name="ResetPassword" 
+        component={ResetPasswordScreen}
+        options={{ title: 'Reset Password', headerShown: true }}
+      />
     </Stack.Navigator>
   );
 };
@@ -211,19 +231,56 @@ const AppNavigator = () => {
     console.log('User role:', user.role, 'User object:', JSON.stringify(user));
   }
 
+  // Check if terms need to be accepted (skip for super_admin)
+  const needsTermsAcceptance = user && user.role !== 'super_admin' && !user.termsAccepted;
+
   return (
-    <NavigationContainer key={user ? (user.role === 'admin' ? 'admin' : 'user') : 'auth'}>
+    <NavigationContainer key={user ? (user.role === 'super_admin' ? 'admin' : user.role === 'vendor' ? 'vendor' : 'user') : 'auth'}>
       {user ? (
         <Stack.Navigator>
-          {user.role === 'admin' ? (
+          {needsTermsAcceptance ? (
             <Stack.Screen 
-              name="Admin" 
-              component={AdminScreen}
-              options={{ title: 'Admin Dashboard' }}
+              name="TermsAndConditions" 
+              component={TermsAndConditionsScreen}
+              options={{ title: 'Terms and Conditions', headerShown: true, gestureEnabled: false }}
+            />
+          ) : user.role === 'super_admin' ? (
+            <>
+              <Stack.Screen 
+                name="Admin" 
+                component={AdminScreen}
+                options={{ title: 'Admin Dashboard' }}
+              />
+              <Stack.Screen 
+                name="VendorDetail" 
+                component={VendorDetailScreen}
+                options={{ title: 'Vendor Details' }}
+              />
+              <Stack.Screen 
+                name="ProfileDetail" 
+                component={ProfileDetailScreen}
+                options={{ title: 'Profile Details' }}
+              />
+              <Stack.Screen 
+                name="Profile" 
+                component={ProfileScreen}
+                options={{ title: 'Profile' }}
+              />
+            </>
+          ) : user.role === 'vendor' ? (
+            <Stack.Screen 
+              name="Vendor" 
+              component={VendorDashboardScreen}
+              options={{ title: 'Vendor Dashboard' }}
             />
           ) : (
             <>
-          <Stack.Screen name="Main" component={MainTabs} options={{ headerShown: false }} />
+              <Stack.Screen 
+                name="Home" 
+                component={UserLandingScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen name="Main" component={MainTabs} options={{ headerShown: false }} />
               <Stack.Screen 
                 name="Profile" 
                 component={ProfileScreen}
@@ -260,6 +317,11 @@ const AppNavigator = () => {
                 options={{ title: 'Notifications' }}
               />
               <Stack.Screen 
+                name="TermsAndConditions" 
+                component={TermsAndConditionsScreen}
+                options={{ title: 'Terms and Conditions', headerShown: true }}
+              />
+              <Stack.Screen 
                 name="Subscription" 
                 component={SubscriptionScreen}
                 options={({ navigation }) => ({
@@ -283,6 +345,11 @@ const AppNavigator = () => {
                     );
                   },
                 })}
+              />
+              <Stack.Screen 
+                name="NotFound" 
+                component={NotFoundScreen}
+                options={{ title: 'Not Found' }}
               />
             </>
           )}
@@ -356,11 +423,13 @@ const styles = StyleSheet.create({
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <AppNavigator />
-    </AuthProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <AppNavigator />
+        </AuthProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 

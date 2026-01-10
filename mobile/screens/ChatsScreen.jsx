@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Image } from 'react-native';
+import { View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Image, Alert } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useQuery } from 'react-query';
 import { getCurrentSubscription } from '../services/subscriptionService';
 import { getMyProfile } from '../services/profileService';
-import { getChats, getMessages, sendMessage } from '../services/chatService';
+import { getChats, getMessages, sendMessage, setTyping, getTyping, blockUser, unblockUser, getBlockedUsers, deleteMessage, getMediaGallery, addReaction, removeReaction } from '../services/chatService';
 import { getImageUrl } from '../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import SubscriptionRequiredModal from '../components/SubscriptionRequiredModal';
@@ -19,6 +20,11 @@ const ChatsScreen = ({ navigation, route }) => {
   const [userId, setUserId] = useState(null);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [showProfileIncompleteModal, setShowProfileIncompleteModal] = useState(false);
+  const [typingUsers, setTypingUsers] = useState([]);
+  const [blockedUsers, setBlockedUsers] = useState([]);
+  const [showBlockMenu, setShowBlockMenu] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const typingTimeoutRef = { current: null };
 
   const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
   const { data: profileData } = useQuery('myProfile', getMyProfile);
@@ -67,15 +73,21 @@ const ChatsScreen = ({ navigation, route }) => {
   useEffect(() => {
     if (selectedChat) {
       loadMessages();
+      loadTyping();
       
       // Auto-refresh messages every 3 seconds
       const messagesInterval = setInterval(() => {
         loadMessages();
+        loadTyping();
       }, 3000);
       
       return () => clearInterval(messagesInterval);
     }
   }, [selectedChat]);
+
+  useEffect(() => {
+    loadBlockedUsers();
+  }, []);
 
   const loadUserId = async () => {
     const user = await AsyncStorage.getItem('user');
@@ -114,16 +126,132 @@ const ChatsScreen = ({ navigation, route }) => {
     }
   };
 
-  const handleSendMessage = async () => {
-    if (!messageText.trim()) return;
+  const loadTyping = async () => {
+    if (!selectedChat) return;
+    try {
+      const response = await getTyping(selectedChat);
+      setTypingUsers(response.typingUsers || []);
+    } catch (error) {
+      // Silently fail
+    }
+  };
+
+  const loadBlockedUsers = async () => {
+    try {
+      const response = await getBlockedUsers();
+      setBlockedUsers(response.blockedUsers || []);
+    } catch (error) {
+      // Silently fail
+    }
+  };
+
+  const handleTyping = () => {
+    if (!selectedChat) return;
+    
+    // Clear existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    
+    // Send typing indicator
+    setTyping(selectedChat).catch(() => {
+      // Silently fail if typing indicator fails
+    });
+    
+    // Clear typing indicator after 3 seconds of no typing
+    typingTimeoutRef.current = setTimeout(() => {
+      // Typing indicator will expire on server
+    }, 3000);
+  };
+
+  const handleBlockUser = async (userId) => {
+    Alert.alert(
+      'Block User',
+      'Are you sure you want to block this user? You will not be able to send or receive messages from them.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Block',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await blockUser(userId);
+              Alert.alert('Success', 'User blocked successfully');
+              setBlockedUsers([...blockedUsers, userId]);
+              loadChats();
+              setShowBlockMenu(false);
+            } catch (error) {
+              Alert.alert('Error', error.response?.data?.message || 'Failed to block user');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleUnblockUser = async (userId) => {
+    try {
+      await unblockUser(userId);
+      alert('User unblocked successfully');
+      setBlockedUsers(blockedUsers.filter(bu => bu._id !== userId));
+      loadChats();
+    } catch (error) {
+      alert(error.response?.data?.message || 'Failed to unblock user');
+    }
+  };
+
+  const handleSendMessage = async (file = null) => {
+    if (!messageText.trim() && !file) return;
 
     try {
-      await sendMessage(selectedChat, { content: messageText });
+      await sendMessage(selectedChat, { 
+        content: messageText,
+        image: file,
+        audio: file?.type?.startsWith('audio/') ? file : null,
+        video: file?.type?.startsWith('video/') ? file : null,
+      });
       setMessageText('');
       loadMessages();
       loadChats();
+      // Clear typing indicator
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
     } catch (error) {
       alert(error.response?.data?.message || 'Failed to send message');
+    }
+  };
+
+  const handleReaction = async (messageId, emoji) => {
+    try {
+      const message = messages.find(m => m._id === messageId);
+      const hasReaction = message?.reactions?.some(r => r.userId === userId && r.emoji === emoji);
+      
+      if (hasReaction) {
+        await removeReaction(selectedChat, messageId, emoji);
+      } else {
+        await addReaction(selectedChat, messageId, emoji);
+      }
+      loadMessages();
+    } catch (error) {
+      alert('Failed to update reaction');
+    }
+  };
+
+  const handleMediaGallery = async () => {
+    try {
+      const data = await getMediaGallery(selectedChat);
+      if (data.media && data.media.length > 0) {
+        Alert.alert(
+          'Media Gallery',
+          `Found ${data.media.length} media items in this chat`,
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Media Gallery', 'No media found in this chat');
+      }
+    } catch (error) {
+      alert('Failed to load media gallery');
     }
   };
 
@@ -152,6 +280,11 @@ const ChatsScreen = ({ navigation, route }) => {
             item.isOnline ? styles.onlineIndicator : styles.offlineIndicator,
           ]}
         />
+        {item.isTyping && (
+          <View style={styles.typingIndicator}>
+            <Text style={styles.typingText}>...</Text>
+          </View>
+        )}
         {item.unreadCount > 0 && (
           <View style={styles.unreadBadge}>
             <Text style={styles.unreadBadgeText}>
@@ -214,15 +347,140 @@ const ChatsScreen = ({ navigation, route }) => {
             isMyMessage ? styles.myMessage : styles.otherMessage,
           ]}
         >
-          <Text style={isMyMessage ? styles.myMessageText : styles.otherMessageText}>
-            {item.content}
-          </Text>
+          {/* Message content based on type */}
+          {item.type === 'image' && item.imageUrl ? (
+            <Image
+              source={{ uri: getImageUrl(item.imageUrl) }}
+              style={styles.messageImage}
+              resizeMode="cover"
+            />
+          ) : item.type === 'video' && item.videoUrl ? (
+            <View style={styles.videoContainer}>
+              <Text style={isMyMessage ? styles.myMessageText : styles.otherMessageText}>
+                📹 Video Message
+              </Text>
+            </View>
+          ) : item.type === 'audio' && item.audioUrl ? (
+            <View style={styles.audioContainer}>
+              <Text style={isMyMessage ? styles.myMessageText : styles.otherMessageText}>
+                🎤 Voice message
+              </Text>
+            </View>
+          ) : item.type === 'file' && item.fileUrl ? (
+            <TouchableOpacity>
+              <Text style={isMyMessage ? styles.myMessageText : styles.otherMessageText}>
+                📎 {item.fileName || 'Download file'}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <Text style={isMyMessage ? styles.myMessageText : styles.otherMessageText}>
+              {item.content}
+            </Text>
+          )}
+          
+          {/* Reactions */}
+          {item.reactions && item.reactions.length > 0 && (
+            <View style={styles.reactionsContainer}>
+              {Object.entries(
+                item.reactions.reduce((acc, r) => {
+                  if (!acc[r.emoji]) acc[r.emoji] = [];
+                  acc[r.emoji].push(r);
+                  return acc;
+                }, {})
+              ).map(([emoji, reactions]) => (
+                <TouchableOpacity
+                  key={emoji}
+                  style={styles.reactionBadge}
+                  onPress={async () => {
+                    try {
+                      const hasReaction = reactions.some(r => r.userId === userId);
+                      if (hasReaction) {
+                        await removeReaction(selectedChat, item._id, emoji);
+                      } else {
+                        await addReaction(selectedChat, item._id, emoji);
+                      }
+                      loadMessages();
+                    } catch (error) {
+                      alert('Failed to update reaction');
+                    }
+                  }}
+                >
+                  <Text style={styles.reactionEmoji}>{emoji}</Text>
+                  <Text style={styles.reactionCount}>{reactions.length}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+          
           <View style={styles.messageTimeContainer}>
             <Text style={[styles.messageTime, isMyMessage && styles.myMessageTime]}>
               {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </Text>
-            {isMyMessage && <Text style={styles.checkmark}>✓</Text>}
+            {isMyMessage && (
+              <>
+                <Text style={styles.checkmark}>
+                  {item.isRead ? '✓✓' : '✓'}
+                </Text>
+                {/* Delete button for recent messages */}
+                {(() => {
+                  const messageAge = Date.now() - new Date(item.createdAt).getTime();
+                  const fiveMinutes = 5 * 60 * 1000;
+                  if (messageAge < fiveMinutes) {
+                    return (
+                      <TouchableOpacity
+                        onPress={async () => {
+                          Alert.alert(
+                            'Delete Message',
+                            'Are you sure you want to delete this message?',
+                            [
+                              { text: 'Cancel', style: 'cancel' },
+                              {
+                                text: 'Delete',
+                                style: 'destructive',
+                                onPress: async () => {
+                                  try {
+                                    await deleteMessage(selectedChat, item._id);
+                                    loadMessages();
+                                  } catch (error) {
+                                    alert('Failed to delete message');
+                                  }
+                                },
+                              },
+                            ]
+                          );
+                        }}
+                      >
+                        <Text style={styles.deleteButton}>×</Text>
+                      </TouchableOpacity>
+                    );
+                  }
+                  return null;
+                })()}
+              </>
+            )}
           </View>
+          
+          {/* Reaction picker button */}
+          <TouchableOpacity
+            style={styles.reactionPickerButton}
+            onPress={() => {
+              Alert.alert(
+                'Add Reaction',
+                'Choose an emoji',
+                [
+                  { text: '👍', onPress: () => handleReaction(item._id, '👍') },
+                  { text: '❤️', onPress: () => handleReaction(item._id, '❤️') },
+                  { text: '😂', onPress: () => handleReaction(item._id, '😂') },
+                  { text: '😮', onPress: () => handleReaction(item._id, '😮') },
+                  { text: '😢', onPress: () => handleReaction(item._id, '😢') },
+                  { text: '🙏', onPress: () => handleReaction(item._id, '🙏') },
+                  { text: 'Cancel', style: 'cancel' },
+                ]
+              );
+            }}
+          >
+            <Text style={styles.reactionPickerText}>😊</Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -238,8 +496,30 @@ const ChatsScreen = ({ navigation, route }) => {
             data={chats}
             renderItem={renderChat}
             keyExtractor={(item) => item._id}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={async () => {
+                  setRefreshing(true);
+                  await loadChats();
+                  setRefreshing(false);
+                }}
+              />
+            }
             ListEmptyComponent={
-              <Text style={styles.emptyText}>No chats yet</Text>
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyEmoji}>💬</Text>
+                <Text style={styles.emptyTitle}>No Chats Yet</Text>
+                <Text style={styles.emptyText}>
+                  You don't have any active chats. Send an interest to someone and when they accept, you can start chatting!
+                </Text>
+                <TouchableOpacity
+                  style={styles.browseButton}
+                  onPress={() => navigation.navigate('Search')}
+                >
+                  <Text style={styles.browseButtonText}>Browse Profiles</Text>
+                </TouchableOpacity>
+              </View>
             }
           />
         )}
@@ -279,6 +559,31 @@ const ChatsScreen = ({ navigation, route }) => {
                 {currentChat?.isOnline ? 'Online' : 'Offline'}
               </Text>
             </View>
+            <TouchableOpacity
+              onPress={() => setShowBlockMenu(!showBlockMenu)}
+              style={styles.menuButton}
+            >
+              <Text style={styles.menuButtonText}>⋮</Text>
+            </TouchableOpacity>
+            {showBlockMenu && (
+              <View style={styles.blockMenu}>
+                {blockedUsers.some(bu => bu._id === currentChat?.otherParticipant?._id) ? (
+                  <TouchableOpacity
+                    onPress={() => handleUnblockUser(currentChat?.otherParticipant?._id)}
+                    style={styles.blockMenuItem}
+                  >
+                    <Text style={styles.blockMenuText}>Unblock User</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    onPress={() => handleBlockUser(currentChat?.otherParticipant?._id)}
+                    style={styles.blockMenuItem}
+                  >
+                    <Text style={[styles.blockMenuText, styles.blockMenuTextDanger]}>Block User</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
           </View>
         );
       })()}
@@ -288,16 +593,64 @@ const ChatsScreen = ({ navigation, route }) => {
         keyExtractor={(item) => item._id}
         style={styles.messagesList}
         inverted
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={async () => {
+              setRefreshing(true);
+              await loadMessages();
+              setRefreshing(false);
+            }}
+          />
+        }
+        ListHeaderComponent={
+          typingUsers.length > 0 ? (
+            <View style={[styles.messageWrapper, styles.otherMessageWrapper]}>
+              <View style={[styles.messageContainer, styles.otherMessage]}>
+                <Text style={styles.typingMessageText}>typing...</Text>
+              </View>
+            </View>
+          ) : null
+        }
       />
       <View style={styles.inputContainer}>
+        <TouchableOpacity
+          style={styles.mediaButton}
+          onPress={handleMediaGallery}
+        >
+          <Text style={styles.mediaButtonText}>🖼️</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.mediaButton}
+          onPress={async () => {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert('Permission needed', 'Please grant camera roll permissions');
+              return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.All,
+              allowsEditing: false,
+              quality: 1,
+            });
+            if (!result.canceled && result.assets[0]) {
+              handleSendMessage(result.assets[0]);
+            }
+          }}
+        >
+          <Text style={styles.mediaButtonText}>📎</Text>
+        </TouchableOpacity>
         <TextInput
           style={styles.input}
           value={messageText}
-          onChangeText={setMessageText}
+          onChangeText={(text) => {
+            setMessageText(text);
+            handleTyping();
+          }}
           placeholder="Type a message..."
           multiline
         />
-        <TouchableOpacity style={styles.sendButton} onPress={handleSendMessage}>
+        <TouchableOpacity style={styles.sendButton} onPress={() => handleSendMessage()}>
           <Text style={styles.sendButtonText}>Send</Text>
         </TouchableOpacity>
       </View>
@@ -408,10 +761,40 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
   },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 30,
+  },
+  emptyEmoji: {
+    fontSize: 60,
+    marginBottom: 15,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    color: '#333',
+  },
   emptyText: {
     textAlign: 'center',
-    marginTop: 50,
+    marginTop: 10,
+    marginBottom: 20,
     color: '#666',
+    paddingHorizontal: 20,
+  },
+  browseButton: {
+    backgroundColor: '#ef4444',
+    padding: 12,
+    borderRadius: 8,
+    minWidth: 200,
+    alignItems: 'center',
+  },
+  browseButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
   },
   chatHeader: {
     flexDirection: 'row',
@@ -533,6 +916,59 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: 'rgba(255, 255, 255, 0.8)',
     marginLeft: 4,
+  },
+  typingIndicator: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: '#3b82f6',
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  typingText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  menuButton: {
+    padding: 8,
+  },
+  menuButtonText: {
+    fontSize: 20,
+    color: '#333',
+    fontWeight: 'bold',
+  },
+  blockMenu: {
+    position: 'absolute',
+    top: 50,
+    right: 10,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    minWidth: 150,
+    zIndex: 10,
+  },
+  blockMenuItem: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  blockMenuText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  blockMenuTextDanger: {
+    color: '#ef4444',
+  },
+  typingMessageText: {
+    fontSize: 14,
+    fontStyle: 'italic',
+    color: '#666',
   },
   inputContainer: {
     flexDirection: 'row',

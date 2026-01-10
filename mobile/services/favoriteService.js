@@ -15,3 +15,15 @@ export const getFavorites = async () => {
   return response.data;
 };
 
+export const updateFavorite = async (profileId, data) => {
+  const response = await api.put(`/favorites/${profileId}`, data);
+  return response.data;
+};
+
+export const exportFavorites = async (format = 'json') => {
+  const response = await api.get(`/favorites/export?format=${format}`, {
+    responseType: format === 'csv' ? 'blob' : 'json',
+  });
+  return response.data;
+};
+

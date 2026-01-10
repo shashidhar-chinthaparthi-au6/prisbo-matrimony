@@ -12,6 +12,10 @@ import {
   createPlan,
   updatePlan,
   deletePlan,
+  bulkApproveSubscriptions,
+  bulkRejectSubscriptions,
+  bulkDeleteSubscriptions,
+  processRefund,
 } from '../controllers/adminSubscriptionController.js';
 import { protect, admin } from '../middleware/auth.js';
 
@@ -28,6 +32,10 @@ router.put('/subscriptions/:id/approve', approveSubscription);
 router.put('/subscriptions/:id/reject', rejectSubscription);
 router.put('/subscriptions/:id/cancel', cancelSubscription);
 router.put('/subscriptions/:id/reactivate', reactivateSubscription);
+router.post('/subscriptions/:id/refund', processRefund);
+router.post('/subscriptions/bulk-approve', bulkApproveSubscriptions);
+router.post('/subscriptions/bulk-reject', bulkRejectSubscriptions);
+router.delete('/subscriptions/bulk-delete', bulkDeleteSubscriptions);
 
 router.get('/subscription-plans', getAllPlans);
 router.post('/subscription-plans', createPlan);

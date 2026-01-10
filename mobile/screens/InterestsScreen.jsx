@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Image, ScrollView } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Image, ScrollView, RefreshControl } from 'react-native';
 import { useQuery } from 'react-query';
-import { getSentInterests, getReceivedInterests, getMutualMatches, acceptInterest, rejectInterest } from '../services/interestService';
+import { getSentInterests, getReceivedInterests, getMutualMatches, acceptInterest, rejectInterest, withdrawInterest, bulkAcceptInterests, bulkRejectInterests, getInterestHistory } from '../services/interestService';
 import { getCurrentSubscription } from '../services/subscriptionService';
 import { getMyProfile } from '../services/profileService';
 import { getOrCreateChat } from '../services/chatService';
@@ -13,12 +13,15 @@ import { isProfileComplete } from '../utils/profileUtils';
 
 const InterestsScreen = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState('received');
+  const [selectedInterests, setSelectedInterests] = useState([]);
+  const [isBulkMode, setIsBulkMode] = useState(false);
   const [sentInterests, setSentInterests] = useState([]);
   const [receivedInterests, setReceivedInterests] = useState([]);
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [showProfileIncompleteModal, setShowProfileIncompleteModal] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const { user } = useAuth();
 
   const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
@@ -88,6 +91,56 @@ const InterestsScreen = ({ navigation }) => {
     }
   };
 
+  const handleWithdraw = async (id) => {
+    try {
+      await withdrawInterest(id);
+      alert('Interest withdrawn');
+      loadData();
+    } catch (error) {
+      alert(error.response?.data?.message || 'Failed to withdraw interest');
+    }
+  };
+
+  const handleBulkAccept = async () => {
+    if (selectedInterests.length === 0) {
+      alert('Please select at least one interest');
+      return;
+    }
+    try {
+      await bulkAcceptInterests(selectedInterests);
+      alert(`${selectedInterests.length} interest(s) accepted`);
+      setSelectedInterests([]);
+      setIsBulkMode(false);
+      loadData();
+    } catch (error) {
+      alert(error.response?.data?.message || 'Failed to accept interests');
+    }
+  };
+
+  const handleBulkReject = async () => {
+    if (selectedInterests.length === 0) {
+      alert('Please select at least one interest');
+      return;
+    }
+    try {
+      await bulkRejectInterests(selectedInterests);
+      alert(`${selectedInterests.length} interest(s) rejected`);
+      setSelectedInterests([]);
+      setIsBulkMode(false);
+      loadData();
+    } catch (error) {
+      alert(error.response?.data?.message || 'Failed to reject interests');
+    }
+  };
+
+  const toggleInterestSelection = (id) => {
+    setSelectedInterests(prev => 
+      prev.includes(id) 
+        ? prev.filter(i => i !== id)
+        : [...prev, id]
+    );
+  };
+
   const handleChat = async (userId) => {
     try {
       const response = await getOrCreateChat(userId);
@@ -116,22 +169,38 @@ const InterestsScreen = ({ navigation }) => {
 
     return (
       <View style={styles.interestCard}>
+        {isBulkMode && activeTab === 'received' && item.status === 'pending' && (
+          <TouchableOpacity
+            style={[styles.checkbox, isSelected && styles.checkboxSelected]}
+            onPress={() => toggleInterestSelection(item._id)}
+          >
+            <Text style={styles.checkboxText}>
+              {isSelected ? '✓' : ''}
+            </Text>
+          </TouchableOpacity>
+        )}
         <View style={styles.interestContent}>
-          {profile?.photos?.[0]?.url ? (
-            <Image
-              source={{ uri: getImageUrl(profile.photos[0].url) }}
-              style={styles.profileImage}
-            />
-          ) : (
-            <View style={styles.profileImagePlaceholder}>
-              <Text style={styles.profileImageText}>
-                {profile?.personalInfo?.firstName?.[0] || 'U'}
-              </Text>
-            </View>
-          )}
+          <TouchableOpacity
+            onPress={() => navigation.navigate('ProfileDetail', { id: profile?._id })}
+            activeOpacity={0.8}
+          >
+            {profile?.photos?.[0]?.url ? (
+              <Image
+                source={{ uri: getImageUrl(profile.photos[0].url) }}
+                style={styles.profileImage}
+              />
+            ) : (
+              <View style={styles.profileImagePlaceholder}>
+                <Text style={styles.profileImageText}>
+                  {profile?.personalInfo?.firstName?.[0] || 'U'}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
           <View style={styles.interestInfo}>
             <TouchableOpacity
               onPress={() => navigation.navigate('ProfileDetail', { id: profile?._id })}
+              activeOpacity={0.7}
             >
               <Text style={styles.profileName}>
                 {profile?.personalInfo?.firstName} {profile?.personalInfo?.lastName}
@@ -143,29 +212,83 @@ const InterestsScreen = ({ navigation }) => {
           </View>
         </View>
         <View style={styles.interestActions}>
-          {activeTab === 'received' && item.status === 'pending' && (
+          <TouchableOpacity
+            style={[styles.actionButton, styles.viewButton]}
+            onPress={(e) => {
+              e.stopPropagation();
+              navigation.navigate('ProfileDetail', { id: profile?._id });
+            }}
+          >
+            <Text style={styles.actionButtonText}>View</Text>
+          </TouchableOpacity>
+          {activeTab === 'received' && item.status === 'pending' && !isBulkMode && (
             <View style={styles.actionButtons}>
               <TouchableOpacity
                 style={[styles.actionButton, styles.acceptButton]}
-                onPress={() => handleAccept(item._id)}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleAccept(item._id);
+                }}
               >
                 <Text style={styles.actionButtonText}>Accept</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.actionButton, styles.rejectButton]}
-                onPress={() => handleReject(item._id)}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleReject(item._id);
+                }}
               >
                 <Text style={styles.actionButtonText}>Reject</Text>
               </TouchableOpacity>
             </View>
           )}
-          {(item.status === 'accepted' || activeTab === 'matches') && (
+          {activeTab === 'sent' && item.status === 'pending' && (
             <TouchableOpacity
-              style={[styles.actionButton, styles.chatButton]}
-              onPress={() => handleChat(userId)}
+              style={[styles.actionButton, styles.withdrawButton]}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleWithdraw(item._id);
+              }}
             >
-              <Text style={styles.actionButtonText}>Chat</Text>
+              <Text style={styles.actionButtonText}>Withdraw</Text>
             </TouchableOpacity>
+          )}
+          {(item.status === 'accepted' || activeTab === 'matches') && (
+            <View style={styles.matchActions}>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.historyButton]}
+                onPress={async (e) => {
+                  e.stopPropagation();
+                  try {
+                    const userId = activeTab === 'matches' 
+                      ? (item.fromUserId?._id === user?.id ? item.toUserId?._id : item.fromUserId?._id)
+                      : (activeTab === 'sent' ? item.toUserId?._id : item.fromUserId?._id);
+                    const history = await getInterestHistory(userId);
+                    Alert.alert(
+                      'Interest History',
+                      `Compatibility: ${history.compatibility}%\n\nTimeline:\n${history.timeline.map(t => 
+                        `${new Date(t.date).toLocaleDateString()}: ${t.action.replace(/_/g, ' ')} (${t.status})`
+                      ).join('\n')}`,
+                      [{ text: 'OK' }]
+                    );
+                  } catch (error) {
+                    Alert.alert('Error', 'Failed to load history');
+                  }
+                }}
+              >
+                <Text style={styles.actionButtonText}>📜 History</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.chatButton]}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleChat(userId);
+                }}
+              >
+                <Text style={styles.actionButtonText}>Chat</Text>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
       </View>
@@ -214,9 +337,61 @@ const InterestsScreen = ({ navigation }) => {
           data={getCurrentData()}
           renderItem={renderInterestItem}
           keyExtractor={(item) => item._id}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={async () => {
+                setRefreshing(true);
+                await loadData();
+                setRefreshing(false);
+              }}
+            />
+          }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No interests found</Text>
+              {activeTab === 'sent' ? (
+                <>
+                  <Text style={styles.emptyEmoji}>💌</Text>
+                  <Text style={styles.emptyTitle}>No Sent Interests</Text>
+                  <Text style={styles.emptyText}>
+                    You haven't sent any interests yet. Browse profiles and send interests to people you're interested in!
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() => navigation.navigate('Search')}
+                  >
+                    <Text style={styles.actionButtonText}>Browse Profiles</Text>
+                  </TouchableOpacity>
+                </>
+              ) : activeTab === 'received' ? (
+                <>
+                  <Text style={styles.emptyEmoji}>📬</Text>
+                  <Text style={styles.emptyTitle}>No Received Interests</Text>
+                  <Text style={styles.emptyText}>
+                    You haven't received any interests yet. Complete your profile to increase your visibility!
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() => navigation.navigate('Profile', { edit: true })}
+                  >
+                    <Text style={styles.actionButtonText}>Complete Profile</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.emptyEmoji}>💕</Text>
+                  <Text style={styles.emptyTitle}>No Matches Yet</Text>
+                  <Text style={styles.emptyText}>
+                    You don't have any mutual matches yet. When someone accepts your interest, they'll appear here!
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() => navigation.navigate('Search')}
+                  >
+                    <Text style={styles.actionButtonText}>Browse More Profiles</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           }
         />
@@ -238,6 +413,50 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  bulkActionsContainer: {
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+    backgroundColor: '#f9f9f9',
+  },
+  bulkActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  bulkActionButton: {
+    flex: 1,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: '#ef4444',
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#9ca3af',
+  },
+  bulkActionButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderWidth: 2,
+    borderColor: '#ef4444',
+    borderRadius: 4,
+    marginRight: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  checkboxSelected: {
+    backgroundColor: '#ef4444',
+  },
+  checkboxText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
   },
   title: {
     fontSize: 24,
@@ -280,11 +499,33 @@ const styles = StyleSheet.create({
     padding: 15,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderWidth: 2,
+    borderColor: '#ef4444',
+    borderRadius: 4,
+    marginRight: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  checkboxSelected: {
+    backgroundColor: '#ef4444',
+  },
+  checkboxText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
   },
   interestContent: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 10,
+    flex: 1,
   },
   profileImage: {
     width: 60,
@@ -330,6 +571,9 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
+  },
+  viewButton: {
+    backgroundColor: '#6b7280',
   },
   acceptButton: {
     backgroundColor: '#10b981',

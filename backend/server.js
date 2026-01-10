@@ -2,6 +2,8 @@ import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import connectDB from './config/database.js';
+import { securityHeaders, xssProtection, requestSizeLimiter } from './middleware/security.js';
+import { generalLimiter, authLimiter, uploadLimiter, searchLimiter, adminLimiter, chatLimiter, notificationLimiter } from './middleware/rateLimiter.js';
 
 // Import routes
 import authRoutes from './routes/authRoutes.js';
@@ -11,9 +13,11 @@ import interestRoutes from './routes/interestRoutes.js';
 import favoriteRoutes from './routes/favoriteRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
+import vendorRoutes from './routes/vendorRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import subscriptionRoutes from './routes/subscriptionRoutes.js';
 import adminSubscriptionRoutes from './routes/adminSubscriptionRoutes.js';
+import termsRoutes from './routes/termsRoutes.js';
 
 // Load env vars
 dotenv.config();
@@ -159,6 +163,18 @@ app.use(cors(corsOptions));
 // Handle preflight requests explicitly (additional safety)
 app.options('*', cors(corsOptions));
 
+// Security headers (helmet)
+app.use(securityHeaders);
+
+// Request size limiter
+app.use(requestSizeLimiter);
+
+// XSS protection
+app.use(xssProtection);
+
+// General rate limiting (applies to all routes)
+app.use('/api', generalLimiter);
+
 // Request logging middleware (for debugging)
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.path} - Origin: ${req.headers.origin || 'none'}`);
@@ -166,8 +182,8 @@ app.use((req, res, next) => {
 });
 
 // Body parsing middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Serve static files from uploads directory
 import path from 'path';
@@ -179,17 +195,19 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // Ensure database connection before API routes (except health check)
 app.use('/api', ensureDBConnection);
 
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/profiles', profileRoutes);
-app.use('/api/search', searchRoutes);
+// Routes with specific rate limiters
+app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/profiles', uploadLimiter, profileRoutes);
+app.use('/api/search', searchLimiter, searchRoutes);
 app.use('/api/interests', interestRoutes);
 app.use('/api/favorites', favoriteRoutes);
-app.use('/api/chats', chatRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/notifications', notificationRoutes);
+app.use('/api/chats', chatLimiter, chatRoutes);
+app.use('/api/admin', adminLimiter, adminRoutes);
+app.use('/api/vendor', vendorRoutes);
+app.use('/api/notifications', notificationLimiter, notificationRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
-app.use('/api/admin', adminSubscriptionRoutes);
+app.use('/api/admin', adminLimiter, adminSubscriptionRoutes);
+app.use('/api/terms', termsRoutes);
 
 // Health check (works even if DB is not connected)
 app.get('/api/health', (req, res) => {
@@ -240,8 +258,34 @@ const PORT = process.env.PORT || 5000;
 
 // Only listen if not in Vercel serverless environment
 if (!process.env.VERCEL) {
-  app.listen(PORT, () => {
+  app.listen(PORT, async () => {
     console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+    
+    // Start subscription expiry checks (run every 24 hours)
+    const { checkAndSendExpiryWarnings, processAutoRenewals } = await import('./utils/subscriptionExpiry.js');
+    const { checkAndExpireInterests } = await import('./utils/interestExpiry.js');
+    
+    // Run immediately on startup
+    checkAndSendExpiryWarnings().catch(err => console.error('Error in initial expiry check:', err));
+    processAutoRenewals().catch(err => console.error('Error in initial auto-renewal check:', err));
+    checkAndExpireInterests().catch(err => console.error('Error in initial interest expiry check:', err));
+    
+    // Schedule daily checks (every 24 hours)
+    setInterval(() => {
+      checkAndSendExpiryWarnings().catch(err => console.error('Error in scheduled expiry check:', err));
+    }, 24 * 60 * 60 * 1000); // 24 hours
+    
+    setInterval(() => {
+      processAutoRenewals().catch(err => console.error('Error in scheduled auto-renewal check:', err));
+    }, 24 * 60 * 60 * 1000); // 24 hours
+    
+    // Check for expired interests every 6 hours
+    setInterval(() => {
+      checkAndExpireInterests().catch(err => console.error('Error in scheduled interest expiry check:', err));
+    }, 6 * 60 * 60 * 1000); // 6 hours
+    
+    console.log('Subscription expiry checks scheduled');
+    console.log('Interest expiry checks scheduled');
   });
 }
 

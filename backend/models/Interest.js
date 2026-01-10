@@ -20,6 +20,22 @@ const interestSchema = new mongoose.Schema(
     message: {
       type: String,
     },
+    expiresAt: {
+      type: Date,
+      default: function() {
+        // Default expiry: 30 days from creation
+        const expiryDate = new Date();
+        expiryDate.setDate(expiryDate.getDate() + 30);
+        return expiryDate;
+      },
+    },
+    expired: {
+      type: Boolean,
+      default: false,
+    },
+    expiredAt: {
+      type: Date,
+    },
   },
   {
     timestamps: true,

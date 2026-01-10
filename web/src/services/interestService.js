@@ -30,3 +30,23 @@ export const getMutualMatches = async () => {
   return response.data;
 };
 
+export const withdrawInterest = async (id) => {
+  const response = await api.delete(`/interests/${id}`);
+  return response.data;
+};
+
+export const bulkAcceptInterests = async (interestIds) => {
+  const response = await api.post('/interests/bulk-accept', { interestIds });
+  return response.data;
+};
+
+export const bulkRejectInterests = async (interestIds) => {
+  const response = await api.post('/interests/bulk-reject', { interestIds });
+  return response.data;
+};
+
+export const getInterestHistory = async (userId) => {
+  const response = await api.get(`/interests/history/${userId}`);
+  return response.data;
+};
+

@@ -5,8 +5,8 @@ import Profile from '../models/Profile.js';
  * Blocks access if profile is pending or rejected
  */
 export const requireApprovedProfile = async (req, res, next) => {
-  // Admins bypass profile verification checks
-  if (req.user && req.user.role === 'admin') {
+  // Super admins bypass profile verification checks
+  if (req.user && req.user.role === 'super_admin') {
     return next();
   }
 

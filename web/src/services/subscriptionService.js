@@ -43,3 +43,42 @@ export const getInvoice = async (subscriptionId) => {
   return response.data;
 };
 
+export const toggleAutoRenew = async (autoRenew) => {
+  const response = await api.put('/subscriptions/auto-renew', { autoRenew });
+  return response.data;
+};
+
+export const retryPayment = async (subscriptionId, data) => {
+  const response = await api.post(`/subscriptions/${subscriptionId}/retry-payment`, data);
+  return response.data;
+};
+
+export const downgradeSubscription = async (data) => {
+  const response = await api.post('/subscriptions/downgrade', data);
+  return response.data;
+};
+
+export const pauseSubscription = async () => {
+  const response = await api.post('/subscriptions/pause');
+  return response.data;
+};
+
+export const resumeSubscription = async () => {
+  const response = await api.post('/subscriptions/resume');
+  return response.data;
+};
+
+export const exportPaymentHistory = async () => {
+  const response = await api.get('/subscriptions/history/export', {
+    responseType: 'blob',
+  });
+  const url = window.URL.createObjectURL(new Blob([response.data]));
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', `payment-history-${new Date().toISOString().split('T')[0]}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  return response.data;
+};
+

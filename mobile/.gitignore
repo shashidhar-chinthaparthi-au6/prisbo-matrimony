@@ -10,6 +10,14 @@ npm-debug.*
 *.orig.*
 web-build/
 
+# Generated native code (can be regenerated with expo prebuild)
+android/
+ios/
+
+# Generated APK files
+*.apk
+*.aab
+
 # macOS
 .DS_Store
 

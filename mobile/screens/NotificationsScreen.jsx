@@ -1,20 +1,23 @@
 import { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, RefreshControl } from 'react-native';
 import { useQuery } from 'react-query';
 import { getCurrentSubscription } from '../services/subscriptionService';
 import { getMyProfile } from '../services/profileService';
-import { getNotifications, markAsRead, markAllAsRead, deleteNotification, deleteAllNotifications } from '../services/notificationService';
+import { getNotifications, markAsRead, markAllAsRead, deleteNotification, deleteAllNotifications, getNotificationPreferences, updateNotificationPreferences } from '../services/notificationService';
 import SubscriptionRequiredModal from '../components/SubscriptionRequiredModal';
 import ProfileIncompleteModal from '../components/ProfileIncompleteModal';
 import { isProfileComplete } from '../utils/profileUtils';
 
 const NotificationsScreen = ({ navigation }) => {
   const [filter, setFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [showProfileIncompleteModal, setShowProfileIncompleteModal] = useState(false);
+  const [showPreferences, setShowPreferences] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
   const { data: profileData } = useQuery('myProfile', getMyProfile);
@@ -26,7 +29,10 @@ const NotificationsScreen = ({ navigation }) => {
       return;
     }
     try {
-      const response = await getNotifications({ unreadOnly: filter === 'unread' });
+      const response = await getNotifications({ 
+        unreadOnly: filter === 'unread',
+        type: typeFilter !== 'all' ? typeFilter : undefined,
+      });
       setNotifications(response.notifications || []);
       setUnreadCount(response.unreadCount || 0);
     } catch (error) {
@@ -76,13 +82,20 @@ const NotificationsScreen = ({ navigation }) => {
     }
 
     // Navigate based on notification type
-    if (notification.type === 'new_message' && notification.relatedChatId) {
-      navigation.navigate('Chats', { chatId: notification.relatedChatId });
+    if (notification.type === 'new_message' || notification.type === 'support_message') {
+      if (notification.relatedChatId) {
+        navigation.navigate('Chats', { chatId: notification.relatedChatId });
+      } else {
+        navigation.navigate('Chats');
+      }
+    } else if (notification.type === 'interest_sent' || notification.type === 'interest_accepted' || notification.type === 'interest_rejected') {
+      navigation.navigate('Interests');
     } else if (notification.relatedProfileId) {
       navigation.navigate('ProfileDetail', { id: notification.relatedProfileId });
-    } else if (notification.type === 'interest_sent' || notification.type === 'interest_accepted') {
-      // Navigate to interests screen if exists
-      alert('Navigate to interests');
+    } else if (notification.type === 'subscription_approved' || notification.type === 'subscription_rejected' || notification.type === 'subscription_expiring' || notification.type === 'subscription_expired') {
+      navigation.navigate('Subscription');
+    } else if (notification.type === 'profile_approved' || notification.type === 'profile_rejected') {
+      navigation.navigate('Profile');
     }
   };
 
@@ -140,9 +153,46 @@ const NotificationsScreen = ({ navigation }) => {
       case 'interest_rejected':
         return '❌';
       case 'new_message':
+      case 'support_message':
         return '💬';
+      case 'profile_approved':
+        return '✓';
+      case 'profile_rejected':
+        return '✗';
+      case 'subscription_approved':
+        return '💰';
+      case 'subscription_rejected':
+        return '❌';
+      case 'subscription_expiring':
+      case 'subscription_expired':
+        return '⏰';
       default:
         return '🔔';
+    }
+  };
+
+  const notificationTypes = [
+    { value: 'all', label: 'All' },
+    { value: 'interest_sent', label: 'Interests' },
+    { value: 'interest_accepted', label: 'Accepted' },
+    { value: 'new_message', label: 'Messages' },
+    { value: 'support_message', label: 'Support' },
+    { value: 'profile_approved', label: 'Profile' },
+    { value: 'subscription_approved', label: 'Subscription' },
+  ];
+
+  const { data: preferencesData, refetch: refetchPreferences } = useQuery(
+    'notification-preferences',
+    getNotificationPreferences
+  );
+
+  const handleUpdatePreferences = async (preferences) => {
+    try {
+      await updateNotificationPreferences(preferences);
+      Alert.alert('Success', 'Notification preferences updated');
+      refetchPreferences();
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.message || 'Failed to update preferences');
     }
   };
 
@@ -188,7 +238,15 @@ const NotificationsScreen = ({ navigation }) => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Notifications</Text>
+        <View style={styles.headerTop}>
+          <Text style={styles.title}>Notifications</Text>
+          <TouchableOpacity
+            onPress={() => setShowPreferences(!showPreferences)}
+            style={styles.preferencesButton}
+          >
+            <Text style={styles.preferencesButtonText}>⚙️</Text>
+          </TouchableOpacity>
+        </View>
         <View style={styles.headerActions}>
           <TouchableOpacity
             style={[styles.filterButton, filter === 'unread' && styles.filterButtonActive]}
@@ -209,13 +267,122 @@ const NotificationsScreen = ({ navigation }) => {
             </TouchableOpacity>
           )}
         </View>
+        {/* Type Filter */}
+        <View style={styles.typeFilterContainer}>
+          <FlatList
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            data={notificationTypes}
+            keyExtractor={(item) => item.value}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={[
+                  styles.typeFilterButton,
+                  typeFilter === item.value && styles.typeFilterButtonActive
+                ]}
+                onPress={() => setTypeFilter(item.value)}
+              >
+                <Text style={[
+                  styles.typeFilterButtonText,
+                  typeFilter === item.value && styles.typeFilterButtonTextActive
+                ]}>
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            )}
+          />
+        </View>
       </View>
+
+      {/* Preferences Modal */}
+      {showPreferences && preferencesData && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Notification Preferences</Text>
+              <TouchableOpacity onPress={() => setShowPreferences(false)}>
+                <Text style={styles.modalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.preferencesContent}>
+              <Text style={styles.preferencesSectionTitle}>Email Notifications</Text>
+              {Object.keys(preferencesData.preferences.email).map((key) => (
+                <View key={key} style={styles.preferenceItem}>
+                  <Text style={styles.preferenceLabel}>{key.charAt(0).toUpperCase() + key.slice(1)}</Text>
+                  <TouchableOpacity
+                    style={[styles.checkbox, preferencesData.preferences.email[key] && styles.checkboxChecked]}
+                    onPress={() => {
+                      const newPrefs = {
+                        ...preferencesData.preferences,
+                        email: {
+                          ...preferencesData.preferences.email,
+                          [key]: !preferencesData.preferences.email[key],
+                        },
+                      };
+                      handleUpdatePreferences(newPrefs);
+                    }}
+                  >
+                    {preferencesData.preferences.email[key] && <Text style={styles.checkmark}>✓</Text>}
+                  </TouchableOpacity>
+                </View>
+              ))}
+              
+              <Text style={styles.preferencesSectionTitle}>Push Notifications</Text>
+              {Object.keys(preferencesData.preferences.push).map((key) => (
+                <View key={key} style={styles.preferenceItem}>
+                  <Text style={styles.preferenceLabel}>{key.charAt(0).toUpperCase() + key.slice(1)}</Text>
+                  <TouchableOpacity
+                    style={[styles.checkbox, preferencesData.preferences.push[key] && styles.checkboxChecked]}
+                    onPress={() => {
+                      const newPrefs = {
+                        ...preferencesData.preferences,
+                        push: {
+                          ...preferencesData.preferences.push,
+                          [key]: !preferencesData.preferences.push[key],
+                        },
+                      };
+                      handleUpdatePreferences(newPrefs);
+                    }}
+                  >
+                    {preferencesData.preferences.push[key] && <Text style={styles.checkmark}>✓</Text>}
+                  </TouchableOpacity>
+                </View>
+              ))}
+              
+              <View style={styles.preferenceItem}>
+                <Text style={styles.preferenceLabel}>Sound</Text>
+                <TouchableOpacity
+                  style={[styles.checkbox, preferencesData.preferences.sound && styles.checkboxChecked]}
+                  onPress={() => {
+                    const newPrefs = {
+                      ...preferencesData.preferences,
+                      sound: !preferencesData.preferences.sound,
+                    };
+                    handleUpdatePreferences(newPrefs);
+                  }}
+                >
+                  {preferencesData.preferences.sound && <Text style={styles.checkmark}>✓</Text>}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      )}
 
       {loading ? (
         <ActivityIndicator size="large" style={styles.loader} />
-      ) : notifications.filter(n => filter === 'all' || !n.isRead).length > 0 ? (
+      ) : notifications.filter(n => {
+        const matchesFilter = filter === 'all' || !n.isRead;
+        const matchesType = typeFilter === 'all' || n.type === typeFilter;
+        return matchesFilter && matchesType;
+      }).length > 0 ? (
         <FlatList
-          data={notifications.filter(n => filter === 'all' || !n.isRead)}
+          data={notifications.filter(n => {
+            const matchesFilter = filter === 'all' || !n.isRead;
+            const matchesType = typeFilter === 'all' || n.type === typeFilter;
+            return matchesFilter && matchesType;
+          })}
           renderItem={renderNotification}
           keyExtractor={(item) => item._id}
           ListEmptyComponent={
@@ -224,7 +391,15 @@ const NotificationsScreen = ({ navigation }) => {
         />
       ) : (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No notifications found</Text>
+          <Text style={styles.emptyEmoji}>🔔</Text>
+          <Text style={styles.emptyTitle}>
+            {filter === 'unread' ? 'No Unread Notifications' : 'No Notifications'}
+          </Text>
+          <Text style={styles.emptyText}>
+            {filter === 'unread' 
+              ? "You're all caught up! No unread notifications."
+              : "You don't have any notifications yet. You'll be notified about interests, matches, and other important updates."}
+          </Text>
         </View>
       )}
 
@@ -359,13 +534,131 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 30,
+  },
+  emptyEmoji: {
+    fontSize: 60,
+    marginBottom: 15,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    color: '#333',
   },
   emptyText: {
     fontSize: 16,
     color: '#666',
+    textAlign: 'center',
+    paddingHorizontal: 20,
   },
   loader: {
     marginTop: 50,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  preferencesButton: {
+    padding: 8,
+  },
+  preferencesButtonText: {
+    fontSize: 20,
+  },
+  typeFilterContainer: {
+    marginTop: 10,
+    paddingVertical: 5,
+  },
+  typeFilterButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#f0f0f0',
+    marginRight: 8,
+  },
+  typeFilterButtonActive: {
+    backgroundColor: '#ef4444',
+  },
+  typeFilterButtonText: {
+    color: '#666',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  typeFilterButtonTextActive: {
+    color: '#fff',
+  },
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+    width: '90%',
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  modalClose: {
+    fontSize: 24,
+    color: '#999',
+  },
+  preferencesContent: {
+    maxHeight: 400,
+  },
+  preferencesSectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginTop: 15,
+    marginBottom: 10,
+  },
+  preferenceItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  preferenceLabel: {
+    fontSize: 14,
+    color: '#333',
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderWidth: 2,
+    borderColor: '#ddd',
+    borderRadius: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: '#ef4444',
+    borderColor: '#ef4444',
+  },
+  checkmark: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
 });
 

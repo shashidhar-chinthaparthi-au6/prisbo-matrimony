@@ -43,3 +43,13 @@ export const setPrimaryPhoto = async (photoId) => {
   return response.data;
 };
 
+export const reorderPhotos = async (photoIds) => {
+  const response = await api.put('/profiles/photos/reorder', { photoIds });
+  return response.data;
+};
+
+export const deleteProfile = async (profileId) => {
+  const response = await api.delete(`/profiles/${profileId}`);
+  return response.data;
+};
+

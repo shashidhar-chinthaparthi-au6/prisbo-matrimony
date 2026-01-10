@@ -46,10 +46,11 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-  if (file.mimetype.startsWith('image/')) {
+  // Allow images and PDFs for vendor documents
+  if (file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf') {
     cb(null, true);
   } else {
-    cb(new Error('Only image files are allowed'), false);
+    cb(new Error('Only image and PDF files are allowed'), false);
   }
 };
 
@@ -57,12 +58,21 @@ export const upload = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB
+    fileSize: 10 * 1024 * 1024, // 10MB for documents
   },
 });
 
 export const uploadSingle = upload.single('photo');
-export const uploadMultiple = upload.array('photos', 10);
+export const uploadMultiple = upload.array('photos', 10); // Max 10 photos at once
+
+// For vendor document uploads - multiple fields
+export const uploadVendorDocuments = upload.fields([
+  { name: 'businessRegistration', maxCount: 1 },
+  { name: 'gstCertificate', maxCount: 1 },
+  { name: 'panCard', maxCount: 1 },
+  { name: 'aadharCard', maxCount: 1 },
+  { name: 'otherDocuments', maxCount: 10 },
+]);
 
 // Helper function to get public URL for local file
 export const getLocalFileUrl = (filePath) => {

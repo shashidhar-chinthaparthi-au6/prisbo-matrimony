@@ -23,12 +23,42 @@ const messageSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ['text', 'image'],
+      enum: ['text', 'image', 'audio', 'video', 'file'],
       default: 'text',
     },
     imageUrl: {
       type: String,
     },
+    audioUrl: {
+      type: String,
+    },
+    videoUrl: {
+      type: String,
+    },
+    fileUrl: {
+      type: String,
+    },
+    fileName: {
+      type: String,
+    },
+    fileSize: {
+      type: Number,
+    },
+    reactions: [{
+      userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true,
+      },
+      emoji: {
+        type: String,
+        required: true,
+      },
+      createdAt: {
+        type: Date,
+        default: Date.now,
+      },
+    }],
     isRead: {
       type: Boolean,
       default: false,

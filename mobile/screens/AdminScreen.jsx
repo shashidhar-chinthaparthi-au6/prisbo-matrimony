@@ -20,6 +20,15 @@ import {
   updateProfileField,
   deleteProfilePhoto,
   getVerificationStats,
+  bulkApproveProfiles,
+  bulkRejectProfiles,
+  bulkDeleteProfiles,
+  bulkApproveSubscriptions,
+  bulkRejectSubscriptions,
+  bulkDeleteSubscriptions,
+  bulkBlockUsers,
+  bulkDeleteUsers,
+  getVendors,
 } from '../services/adminService';
 
 const AdminScreen = ({ navigation }) => {
@@ -36,6 +45,19 @@ const AdminScreen = ({ navigation }) => {
   const [verificationStats, setVerificationStats] = useState(null);
   const [selectedProfile, setSelectedProfile] = useState(null);
   const [selectedProfileData, setSelectedProfileData] = useState(null);
+  const [vendors, setVendors] = useState([]);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileModalId, setProfileModalId] = useState(null);
+  const [profileModalData, setProfileModalData] = useState(null);
+  // Bulk operations state
+  const [bulkMode, setBulkMode] = useState(false); // For verification tab
+  const [bulkModeSubscriptions, setBulkModeSubscriptions] = useState(false);
+  const [bulkModeUsers, setBulkModeUsers] = useState(false);
+  const [bulkModeProfiles, setBulkModeProfiles] = useState(false);
+  const [selectedProfileIds, setSelectedProfileIds] = useState([]); // For verification tab
+  const [selectedProfileIdsForManagement, setSelectedProfileIdsForManagement] = useState([]); // For profiles tab
+  const [selectedSubscriptionIds, setSelectedSubscriptionIds] = useState([]);
+  const [selectedUserIds, setSelectedUserIds] = useState([]);
 
   useEffect(() => {
     if (activeTab === 'stats') {
@@ -44,6 +66,8 @@ const AdminScreen = ({ navigation }) => {
       loadUsers();
     } else if (activeTab === 'profiles') {
       loadProfiles();
+    } else if (activeTab === 'vendors') {
+      loadVendors();
     } else if (activeTab === 'subscriptions') {
       loadSubscriptions();
       loadPendingSubscriptions();
@@ -53,6 +77,12 @@ const AdminScreen = ({ navigation }) => {
       loadVerificationStats();
     }
   }, [activeTab, page]);
+
+  useEffect(() => {
+    if (profileModalId) {
+      loadProfileModalData(profileModalId);
+    }
+  }, [profileModalId]);
 
   useEffect(() => {
     if (selectedProfile) {
@@ -93,6 +123,28 @@ const AdminScreen = ({ navigation }) => {
       Alert.alert('Error', error.response?.data?.message || 'Failed to load profiles');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadVendors = async () => {
+    setLoading(true);
+    try {
+      const response = await getVendors({ page, limit: 20 });
+      setVendors(response.vendors || []);
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.message || 'Failed to load vendors');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadProfileModalData = async (profileId) => {
+    try {
+      const response = await getProfileById(profileId);
+      setProfileModalData(response.profile);
+      setShowProfileModal(true);
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.message || 'Failed to load profile details');
     }
   };
 
@@ -383,10 +435,177 @@ const AdminScreen = ({ navigation }) => {
 
   const renderUser = ({ item }) => (
     <View style={styles.itemCard}>
+      {bulkModeUsers && (
+        <TouchableOpacity
+          style={styles.checkbox}
+          onPress={() => {
+            if (selectedUserIds.includes(item._id)) {
+              setSelectedUserIds(selectedUserIds.filter(id => id !== item._id));
+            } else {
+              setSelectedUserIds([...selectedUserIds, item._id]);
+            }
+          }}
+        >
+          <Text style={selectedUserIds.includes(item._id) ? styles.checkboxChecked : styles.checkboxUnchecked}>
+            {selectedUserIds.includes(item._id) ? '✓' : ''}
+          </Text>
+        </TouchableOpacity>
+      )}
       <View style={styles.itemInfo}>
         <Text style={styles.itemTitle}>{item.email}</Text>
         <Text style={styles.itemSubtitle}>Phone: {item.phone}</Text>
         <Text style={styles.itemSubtitle}>Role: {item.role}</Text>
+        <Text style={styles.itemSubtitle}>
+          Status: {item.isActive ? 'Active' : 'Blocked'}
+        </Text>
+      </View>
+      {!bulkModeUsers && (
+        <TouchableOpacity
+          style={[styles.actionButton, item.isActive ? styles.blockButton : styles.unblockButton]}
+          onPress={() => handleBlockUser(item._id, item.isActive)}
+        >
+          <Text style={styles.actionButtonText}>
+            {item.isActive ? 'Block' : 'Unblock'}
+          </Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+
+  const renderProfile = ({ item }) => (
+    <View style={styles.itemCard}>
+      {bulkModeProfiles && (
+        <TouchableOpacity
+          style={styles.checkbox}
+          onPress={() => {
+            if (selectedProfileIdsForManagement.includes(item._id)) {
+              setSelectedProfileIdsForManagement(selectedProfileIdsForManagement.filter(id => id !== item._id));
+            } else {
+              setSelectedProfileIdsForManagement([...selectedProfileIdsForManagement, item._id]);
+            }
+          }}
+        >
+          <Text style={selectedProfileIdsForManagement.includes(item._id) ? styles.checkboxChecked : styles.checkboxUnchecked}>
+            {selectedProfileIdsForManagement.includes(item._id) ? '✓' : ''}
+          </Text>
+        </TouchableOpacity>
+      )}
+      <View style={styles.itemInfo}>
+        <TouchableOpacity
+          onPress={() => {
+            setProfileModalId(item._id);
+            loadProfileModalData(item._id);
+          }}
+        >
+          <Text style={[styles.itemTitle, { color: '#3b82f6' }]}>
+            {item.personalInfo?.firstName} {item.personalInfo?.lastName}
+          </Text>
+        </TouchableOpacity>
+        <Text style={styles.itemSubtitle}>Type: {item.type}</Text>
+        <Text style={styles.itemSubtitle}>Age: {item.personalInfo?.age}</Text>
+        <Text style={styles.itemSubtitle}>
+          Status: {item.isActive ? 'Active' : 'Inactive'}
+        </Text>
+        <Text style={styles.itemSubtitle}>
+          Verification: {item.verificationStatus === 'approved' ? '✓ Approved' : item.verificationStatus === 'rejected' ? '✗ Rejected' : '⏳ Pending'}
+        </Text>
+        {item.createdBy && (
+          <Text style={styles.itemSubtitle}>
+            Created By: {item.isVendorCreated ? (
+              <TouchableOpacity
+                onPress={() => {
+                  if (item.createdBy._id) {
+                    navigation.navigate('VendorDetail', { id: item.createdBy._id });
+                  }
+                }}
+              >
+                <Text style={{ color: '#3b82f6' }}>
+                  {item.createdBy.companyName || item.createdBy.email || 'Vendor'}
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              'Self-created'
+            )}
+          </Text>
+        )}
+      </View>
+      {!bulkModeProfiles && (
+        <View style={styles.actionsContainer}>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.viewButton]}
+            onPress={() => navigation.navigate('ProfileDetail', { id: item._id })}
+          >
+            <Text style={styles.actionButtonText}>View</Text>
+          </TouchableOpacity>
+          {item.verificationStatus === 'pending' && (
+            <>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.approveButton]}
+                onPress={() => handleApproveProfile(item._id)}
+              >
+                <Text style={styles.actionButtonText}>Approve</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.rejectButton]}
+                onPress={() => handleRejectProfile(item._id)}
+              >
+                <Text style={styles.actionButtonText}>Reject</Text>
+              </TouchableOpacity>
+            </>
+          )}
+          <TouchableOpacity
+            style={[styles.actionButton, item.isActive ? styles.blockButton : styles.unblockButton]}
+            onPress={() => handleUpdateProfileStatus(item._id, item.isActive)}
+          >
+            <Text style={styles.actionButtonText}>
+              {item.isActive ? 'Deactivate' : 'Activate'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.deleteButton]}
+            onPress={() => {
+              Alert.alert(
+                'Delete Profile',
+                'Are you sure you want to delete this profile? It will be moved to the deleted profiles list and can be restored later.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                      try {
+                        await bulkDeleteProfiles([item._id]);
+                        Alert.alert('Success', 'Profile deleted successfully');
+                        loadProfiles();
+                      } catch (error) {
+                        Alert.alert('Error', error.response?.data?.message || 'Failed to delete profile');
+                      }
+                    },
+                  },
+                ]
+              );
+            }}
+          >
+            <Text style={styles.actionButtonText}>Delete</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+
+  const renderVendor = ({ item }) => (
+    <View style={styles.itemCard}>
+      <View style={styles.itemInfo}>
+        <TouchableOpacity
+          onPress={() => navigation.navigate('VendorDetail', { id: item._id })}
+        >
+          <Text style={[styles.itemTitle, { color: '#3b82f6' }]}>
+            {item.firstName} {item.lastName}
+          </Text>
+        </TouchableOpacity>
+        <Text style={styles.itemSubtitle}>Company: {item.companyName || 'N/A'}</Text>
+        <Text style={styles.itemSubtitle}>Email: {item.email}</Text>
+        <Text style={styles.itemSubtitle}>Phone: {item.phone}</Text>
         <Text style={styles.itemSubtitle}>
           Status: {item.isActive ? 'Active' : 'Blocked'}
         </Text>
@@ -397,29 +616,6 @@ const AdminScreen = ({ navigation }) => {
       >
         <Text style={styles.actionButtonText}>
           {item.isActive ? 'Block' : 'Unblock'}
-        </Text>
-      </TouchableOpacity>
-    </View>
-  );
-
-  const renderProfile = ({ item }) => (
-    <View style={styles.itemCard}>
-      <View style={styles.itemInfo}>
-        <Text style={styles.itemTitle}>
-          {item.personalInfo?.firstName} {item.personalInfo?.lastName}
-        </Text>
-        <Text style={styles.itemSubtitle}>Type: {item.type}</Text>
-        <Text style={styles.itemSubtitle}>Age: {item.personalInfo?.age}</Text>
-        <Text style={styles.itemSubtitle}>
-          Status: {item.isActive ? 'Active' : 'Inactive'}
-        </Text>
-      </View>
-      <TouchableOpacity
-        style={[styles.actionButton, item.isActive ? styles.blockButton : styles.unblockButton]}
-        onPress={() => handleUpdateProfileStatus(item._id, item.isActive)}
-      >
-        <Text style={styles.actionButtonText}>
-          {item.isActive ? 'Deactivate' : 'Activate'}
         </Text>
       </TouchableOpacity>
     </View>
@@ -450,6 +646,14 @@ const AdminScreen = ({ navigation }) => {
         >
           <Text style={[styles.tabText, activeTab === 'profiles' && styles.activeTabText]}>
             Profiles
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'vendors' && styles.activeTab]}
+          onPress={() => setActiveTab('vendors')}
+        >
+          <Text style={[styles.tabText, activeTab === 'vendors' && styles.activeTabText]}>
+            Vendors
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -494,22 +698,260 @@ const AdminScreen = ({ navigation }) => {
             </ScrollView>
           )}
           {activeTab === 'users' && (
-            <FlatList
-              style={styles.content}
-              data={users}
-              renderItem={renderUser}
-              keyExtractor={(item) => item._id}
-              ListEmptyComponent={<Text style={styles.emptyText}>No users found</Text>}
-            />
+            <>
+              <View style={styles.bulkActionsHeader}>
+                <TouchableOpacity
+                  style={styles.bulkToggleButton}
+                  onPress={() => {
+                    setBulkModeUsers(!bulkModeUsers);
+                    if (bulkModeUsers) {
+                      setSelectedUserIds([]);
+                    }
+                  }}
+                >
+                  <Text style={styles.bulkToggleText}>
+                    {bulkModeUsers ? 'Cancel' : 'Bulk Actions'}
+                  </Text>
+                </TouchableOpacity>
+                {bulkModeUsers && selectedUserIds.length > 0 && (
+                  <View style={styles.bulkActionsBar}>
+                    <Text style={styles.bulkCountText}>
+                      {selectedUserIds.length} selected
+                    </Text>
+                    <View style={styles.bulkActionButtons}>
+                      <TouchableOpacity
+                        style={[styles.bulkActionButton, styles.blockBulkButton]}
+                        onPress={async () => {
+                          Alert.alert(
+                            'Block Users',
+                            `Block ${selectedUserIds.length} user(s)?`,
+                            [
+                              { text: 'Cancel', style: 'cancel' },
+                              {
+                                text: 'Block',
+                                onPress: async () => {
+                                  try {
+                                    await bulkBlockUsers(selectedUserIds, true);
+                                    Alert.alert('Success', `${selectedUserIds.length} user(s) blocked`);
+                                    setSelectedUserIds([]);
+                                    setBulkModeUsers(false);
+                                    loadUsers();
+                                  } catch (error) {
+                                    Alert.alert('Error', error.response?.data?.message || 'Failed to block users');
+                                  }
+                                },
+                              },
+                            ]
+                          );
+                        }}
+                      >
+                        <Text style={styles.bulkActionButtonText}>Block</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.bulkActionButton, styles.unblockBulkButton]}
+                        onPress={async () => {
+                          Alert.alert(
+                            'Unblock Users',
+                            `Unblock ${selectedUserIds.length} user(s)?`,
+                            [
+                              { text: 'Cancel', style: 'cancel' },
+                              {
+                                text: 'Unblock',
+                                onPress: async () => {
+                                  try {
+                                    await bulkBlockUsers(selectedUserIds, false);
+                                    Alert.alert('Success', `${selectedUserIds.length} user(s) unblocked`);
+                                    setSelectedUserIds([]);
+                                    setBulkModeUsers(false);
+                                    loadUsers();
+                                  } catch (error) {
+                                    Alert.alert('Error', error.response?.data?.message || 'Failed to unblock users');
+                                  }
+                                },
+                              },
+                            ]
+                          );
+                        }}
+                      >
+                        <Text style={styles.bulkActionButtonText}>Unblock</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.bulkActionButton, styles.deleteBulkButton]}
+                        onPress={async () => {
+                          Alert.alert(
+                            'Delete Users',
+                            `Delete ${selectedUserIds.length} user(s)? This cannot be undone.`,
+                            [
+                              { text: 'Cancel', style: 'cancel' },
+                              {
+                                text: 'Delete',
+                                style: 'destructive',
+                                onPress: async () => {
+                                  try {
+                                    await bulkDeleteUsers(selectedUserIds);
+                                    Alert.alert('Success', `${selectedUserIds.length} user(s) deleted`);
+                                    setSelectedUserIds([]);
+                                    setBulkModeUsers(false);
+                                    loadUsers();
+                                  } catch (error) {
+                                    Alert.alert('Error', error.response?.data?.message || 'Failed to delete users');
+                                  }
+                                },
+                              },
+                            ]
+                          );
+                        }}
+                      >
+                        <Text style={styles.bulkActionButtonText}>Delete</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+              </View>
+              <FlatList
+                style={styles.content}
+                data={users}
+                renderItem={renderUser}
+                keyExtractor={(item) => item._id}
+                ListEmptyComponent={<Text style={styles.emptyText}>No users found</Text>}
+              />
+            </>
           )}
           {activeTab === 'profiles' && (
-            <FlatList
-              style={styles.content}
-              data={profiles}
-              renderItem={renderProfile}
-              keyExtractor={(item) => item._id}
-              ListEmptyComponent={<Text style={styles.emptyText}>No profiles found</Text>}
-            />
+            <>
+              <View style={styles.bulkActionsHeader}>
+                <TouchableOpacity
+                  style={[styles.bulkToggleButton, { backgroundColor: '#ef4444', marginRight: 10 }]}
+                  onPress={() => navigation.navigate('Profile', { create: true })}
+                >
+                  <Text style={[styles.bulkToggleText, { color: '#fff' }]}>
+                    ➕ Create Profile
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.bulkToggleButton}
+                  onPress={() => {
+                    setBulkModeProfiles(!bulkModeProfiles);
+                    if (bulkModeProfiles) {
+                      setSelectedProfileIdsForManagement([]);
+                    }
+                  }}
+                >
+                  <Text style={styles.bulkToggleText}>
+                    {bulkModeProfiles ? 'Cancel' : 'Bulk Actions'}
+                  </Text>
+                </TouchableOpacity>
+                {bulkModeProfiles && selectedProfileIdsForManagement.length > 0 && (
+                  <View style={styles.bulkActionsBar}>
+                    <Text style={styles.bulkCountText}>
+                      {selectedProfileIdsForManagement.length} selected
+                    </Text>
+                    <View style={styles.bulkActionButtons}>
+                      <TouchableOpacity
+                        style={[styles.bulkActionButton, styles.unblockBulkButton]}
+                        onPress={async () => {
+                          Alert.alert(
+                            'Activate Profiles',
+                            `Activate ${selectedProfileIdsForManagement.length} profile(s)?`,
+                            [
+                              { text: 'Cancel', style: 'cancel' },
+                              {
+                                text: 'Activate',
+                                onPress: async () => {
+                                  try {
+                                    await Promise.all(
+                                      selectedProfileIdsForManagement.map(id =>
+                                        updateProfileStatus(id, { isActive: true })
+                                      )
+                                    );
+                                    Alert.alert('Success', `${selectedProfileIdsForManagement.length} profile(s) activated`);
+                                    setSelectedProfileIdsForManagement([]);
+                                    setBulkModeProfiles(false);
+                                    loadProfiles();
+                                  } catch (error) {
+                                    Alert.alert('Error', error.response?.data?.message || 'Failed to activate profiles');
+                                  }
+                                },
+                              },
+                            ]
+                          );
+                        }}
+                      >
+                        <Text style={styles.bulkActionButtonText}>Activate</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.bulkActionButton, styles.blockBulkButton]}
+                        onPress={async () => {
+                          Alert.alert(
+                            'Deactivate Profiles',
+                            `Deactivate ${selectedProfileIdsForManagement.length} profile(s)?`,
+                            [
+                              { text: 'Cancel', style: 'cancel' },
+                              {
+                                text: 'Deactivate',
+                                onPress: async () => {
+                                  try {
+                                    await Promise.all(
+                                      selectedProfileIdsForManagement.map(id =>
+                                        updateProfileStatus(id, { isActive: false })
+                                      )
+                                    );
+                                    Alert.alert('Success', `${selectedProfileIdsForManagement.length} profile(s) deactivated`);
+                                    setSelectedProfileIdsForManagement([]);
+                                    setBulkModeProfiles(false);
+                                    loadProfiles();
+                                  } catch (error) {
+                                    Alert.alert('Error', error.response?.data?.message || 'Failed to deactivate profiles');
+                                  }
+                                },
+                              },
+                            ]
+                          );
+                        }}
+                      >
+                        <Text style={styles.bulkActionButtonText}>Deactivate</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.bulkActionButton, styles.deleteBulkButton]}
+                        onPress={async () => {
+                          Alert.alert(
+                            'Delete Profiles',
+                            `Delete ${selectedProfileIdsForManagement.length} profile(s)? They will be moved to the deleted profiles list and can be restored later.`,
+                            [
+                              { text: 'Cancel', style: 'cancel' },
+                              {
+                                text: 'Delete',
+                                style: 'destructive',
+                                onPress: async () => {
+                                  try {
+                                    await bulkDeleteProfiles(selectedProfileIdsForManagement);
+                                    Alert.alert('Success', `${selectedProfileIdsForManagement.length} profile(s) deleted`);
+                                    setSelectedProfileIdsForManagement([]);
+                                    setBulkModeProfiles(false);
+                                    loadProfiles();
+                                  } catch (error) {
+                                    Alert.alert('Error', error.response?.data?.message || 'Failed to delete profiles');
+                                  }
+                                },
+                              },
+                            ]
+                          );
+                        }}
+                      >
+                        <Text style={styles.bulkActionButtonText}>Delete</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+              </View>
+              <FlatList
+                style={styles.content}
+                data={profiles}
+                renderItem={renderProfile}
+                keyExtractor={(item) => item._id}
+                ListEmptyComponent={<Text style={styles.emptyText}>No profiles found</Text>}
+              />
+            </>
           )}
           {activeTab === 'verification' && (
             <ScrollView style={styles.content}>
@@ -614,7 +1056,7 @@ const AdminScreen = ({ navigation }) => {
                             {selectedProfileData.photos.map((photo) => (
                               <View key={photo._id} style={styles.photoContainer}>
                                 <Image
-                                  source={{ uri: photo.url.startsWith('http') ? photo.url : `http://localhost:5000${photo.url}` }}
+                                  source={{ uri: photo.url.startsWith('http') ? photo.url : `https://prisbo-matrimony.vercel.app${photo.url}` }}
                                   style={styles.photo}
                                 />
                                 {photo.isPrimary && (
@@ -1078,7 +1520,12 @@ const AdminScreen = ({ navigation }) => {
                   {pendingSubscriptions.map((sub) => (
                     <View key={sub._id} style={styles.pendingCard}>
                       <View style={styles.pendingInfo}>
-                        <Text style={styles.pendingUser}>{sub.userId?.email}</Text>
+                        <Text style={styles.pendingUser}>
+                          {sub.userId ? (sub.userId.email || sub.userId.phone || 'N/A') : 'N/A'}
+                        </Text>
+                        {sub.userId?.companyName && (
+                          <Text style={styles.pendingDetails}>{sub.userId.companyName}</Text>
+                        )}
                         <Text style={styles.pendingPlan}>{sub.planName}</Text>
                         <Text style={styles.pendingDetails}>
                           {sub.paymentMethod} | ₹{sub.amount}
@@ -1130,7 +1577,12 @@ const AdminScreen = ({ navigation }) => {
                   subscriptions.map((sub) => (
                     <View key={sub._id} style={styles.itemCard}>
                       <View style={styles.itemInfo}>
-                        <Text style={styles.itemTitle}>{sub.userId?.email}</Text>
+                        <Text style={styles.itemTitle}>
+                          {sub.userId ? (sub.userId.email || sub.userId.phone || 'N/A') : 'N/A'}
+                        </Text>
+                        {sub.userId?.companyName && (
+                          <Text style={styles.itemSubtitle}>{sub.userId.companyName}</Text>
+                        )}
                         <Text style={styles.itemSubtitle}>{sub.planName}</Text>
                         <Text style={styles.itemSubtitle}>
                           {sub.paymentMethod} | ₹{sub.amount}
@@ -1197,6 +1649,164 @@ const AdminScreen = ({ navigation }) => {
             </ScrollView>
           )}
         </>
+      )}
+
+      {/* Profile Modal */}
+      {showProfileModal && profileModalData && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modal}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {profileModalData.personalInfo?.firstName} {profileModalData.personalInfo?.lastName}
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowProfileModal(false);
+                  setProfileModalId(null);
+                  setProfileModalData(null);
+                }}
+                style={styles.modalCloseButton}
+              >
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.modalContent}>
+              <View style={styles.modalInfoRow}>
+                <Text style={styles.modalInfoLabel}>Type:</Text>
+                <Text style={styles.modalInfoValue}>{profileModalData.type}</Text>
+              </View>
+              <View style={styles.modalInfoRow}>
+                <Text style={styles.modalInfoLabel}>Age:</Text>
+                <Text style={styles.modalInfoValue}>{profileModalData.personalInfo?.age}</Text>
+              </View>
+              <View style={styles.modalInfoRow}>
+                <Text style={styles.modalInfoLabel}>Email:</Text>
+                <Text style={styles.modalInfoValue}>{profileModalData.userId?.email || 'N/A'}</Text>
+              </View>
+              <View style={styles.modalInfoRow}>
+                <Text style={styles.modalInfoLabel}>Phone:</Text>
+                <Text style={styles.modalInfoValue}>{profileModalData.userId?.phone || 'N/A'}</Text>
+              </View>
+              <View style={styles.modalInfoRow}>
+                <Text style={styles.modalInfoLabel}>Profile ID:</Text>
+                <Text style={styles.modalInfoValue}>{profileModalData._id}</Text>
+              </View>
+              {profileModalData.createdBy && (
+                <View style={styles.modalInfoRow}>
+                  <Text style={styles.modalInfoLabel}>Created By:</Text>
+                  {profileModalData.isVendorCreated ? (
+                    <TouchableOpacity
+                      onPress={() => {
+                        setShowProfileModal(false);
+                        setProfileModalId(null);
+                        setProfileModalData(null);
+                        navigation.navigate('VendorDetail', { id: profileModalData.createdBy._id });
+                      }}
+                    >
+                      <Text style={[styles.modalInfoValue, { color: '#3b82f6' }]}>
+                        {profileModalData.createdBy.companyName || profileModalData.createdBy.email || 'Vendor'}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <Text style={styles.modalInfoValue}>Self-created</Text>
+                  )}
+                </View>
+              )}
+            </ScrollView>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalActionButton, styles.viewFullButton]}
+                onPress={() => {
+                  setShowProfileModal(false);
+                  setProfileModalId(null);
+                  setProfileModalData(null);
+                  navigation.navigate('ProfileDetail', { id: profileModalData._id });
+                }}
+              >
+                <Text style={styles.modalActionButtonText}>View Full Profile</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* Profile Modal */}
+      {showProfileModal && profileModalData && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modal}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {profileModalData.personalInfo?.firstName} {profileModalData.personalInfo?.lastName}
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowProfileModal(false);
+                  setProfileModalId(null);
+                  setProfileModalData(null);
+                }}
+                style={styles.modalCloseButton}
+              >
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.modalContent}>
+              <View style={styles.modalInfoRow}>
+                <Text style={styles.modalInfoLabel}>Type:</Text>
+                <Text style={styles.modalInfoValue}>{profileModalData.type}</Text>
+              </View>
+              <View style={styles.modalInfoRow}>
+                <Text style={styles.modalInfoLabel}>Age:</Text>
+                <Text style={styles.modalInfoValue}>{profileModalData.personalInfo?.age}</Text>
+              </View>
+              <View style={styles.modalInfoRow}>
+                <Text style={styles.modalInfoLabel}>Email:</Text>
+                <Text style={styles.modalInfoValue}>{profileModalData.userId?.email || 'N/A'}</Text>
+              </View>
+              <View style={styles.modalInfoRow}>
+                <Text style={styles.modalInfoLabel}>Phone:</Text>
+                <Text style={styles.modalInfoValue}>{profileModalData.userId?.phone || 'N/A'}</Text>
+              </View>
+              <View style={styles.modalInfoRow}>
+                <Text style={styles.modalInfoLabel}>Profile ID:</Text>
+                <Text style={styles.modalInfoValue}>{profileModalData._id}</Text>
+              </View>
+              {profileModalData.createdBy && (
+                <View style={styles.modalInfoRow}>
+                  <Text style={styles.modalInfoLabel}>Created By:</Text>
+                  {profileModalData.isVendorCreated ? (
+                    <TouchableOpacity
+                      onPress={() => {
+                        setShowProfileModal(false);
+                        setProfileModalId(null);
+                        setProfileModalData(null);
+                        navigation.navigate('VendorDetail', { id: profileModalData.createdBy._id });
+                      }}
+                    >
+                      <Text style={[styles.modalInfoValue, { color: '#3b82f6' }]}>
+                        {profileModalData.createdBy.companyName || profileModalData.createdBy.email || 'Vendor'}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <Text style={styles.modalInfoValue}>Self-created</Text>
+                  )}
+                </View>
+              )}
+            </ScrollView>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalActionButton, styles.viewFullButton]}
+                onPress={() => {
+                  setShowProfileModal(false);
+                  setProfileModalId(null);
+                  setProfileModalData(null);
+                  navigation.navigate('ProfileDetail', { id: profileModalData._id });
+                }}
+              >
+                <Text style={styles.modalActionButtonText}>View Full Profile</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       )}
     </View>
   );
@@ -1364,11 +1974,23 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 10,
   },
+  actionsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 5,
+    marginTop: 8,
+  },
+  viewButton: {
+    backgroundColor: '#3b82f6',
+  },
   approveButton: {
     backgroundColor: '#16a34a',
   },
   rejectButton: {
     backgroundColor: '#dc2626',
+  },
+  deleteButton: {
+    backgroundColor: '#991b1b',
   },
   linkButton: {
     marginTop: 5,
@@ -1562,6 +2184,155 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#999',
     marginTop: 5,
+  },
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  modal: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    width: '90%',
+    maxWidth: 500,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  modalCloseButton: {
+    padding: 5,
+  },
+  modalCloseText: {
+    fontSize: 24,
+    color: '#6b7280',
+  },
+  modalContent: {
+    padding: 20,
+    maxHeight: 400,
+  },
+  modalInfoRow: {
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+  modalInfoLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    width: 100,
+  },
+  modalInfoValue: {
+    fontSize: 14,
+    color: '#6b7280',
+    flex: 1,
+  },
+  modalActions: {
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  modalActionButton: {
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  viewFullButton: {
+    backgroundColor: '#3b82f6',
+  },
+  modalActionButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  bulkActionsHeader: {
+    padding: 10,
+    backgroundColor: '#f9f9f9',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  bulkToggleButton: {
+    backgroundColor: '#3b82f6',
+    padding: 10,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  bulkToggleText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  bulkActionsBar: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: '#dbeafe',
+    borderRadius: 6,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  bulkCountText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1e40af',
+  },
+  bulkActionButtons: {
+    flexDirection: 'row',
+    gap: 5,
+  },
+  bulkActionButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 4,
+    marginLeft: 5,
+  },
+  blockBulkButton: {
+    backgroundColor: '#dc2626',
+  },
+  unblockBulkButton: {
+    backgroundColor: '#16a34a',
+  },
+  deleteBulkButton: {
+    backgroundColor: '#6b7280',
+  },
+  bulkActionButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 12,
+  },
+  checkbox: {
+    width: 30,
+    height: 30,
+    borderWidth: 2,
+    borderColor: '#3b82f6',
+    borderRadius: 4,
+    marginRight: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxChecked: {
+    fontSize: 20,
+    color: '#3b82f6',
+    fontWeight: 'bold',
+  },
+  checkboxUnchecked: {
+    fontSize: 20,
+    color: 'transparent',
   },
 });
 

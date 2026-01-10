@@ -78,6 +78,86 @@ const subscriptionSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Invoice',
     },
+    // Auto-renewal settings
+    autoRenew: {
+      type: Boolean,
+      default: false,
+    },
+    // Grace period (in days)
+    gracePeriodDays: {
+      type: Number,
+      default: 7,
+    },
+    gracePeriodEndDate: {
+      type: Date,
+    },
+    // Payment retry
+    paymentRetryCount: {
+      type: Number,
+      default: 0,
+    },
+    lastPaymentRetryAt: {
+      type: Date,
+    },
+    // Expiry warnings sent
+    expiryWarningSent: {
+      type: Boolean,
+      default: false,
+    },
+    expiryWarningSentAt: {
+      type: Date,
+    },
+    // Pause/Resume
+    isPaused: {
+      type: Boolean,
+      default: false,
+    },
+    pausedAt: {
+      type: Date,
+    },
+    pausedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    resumeDate: {
+      type: Date,
+    },
+    pausedDays: {
+      type: Number,
+      default: 0,
+    },
+    // Prorated billing
+    proratedAmount: {
+      type: Number,
+    },
+    previousPlanId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'SubscriptionPlan',
+    },
+    previousPlanAmount: {
+      type: Number,
+    },
+    previousPlanEndDate: {
+      type: Date,
+    },
+    // Refund
+    refundAmount: {
+      type: Number,
+    },
+    refundReason: {
+      type: String,
+    },
+    refundedAt: {
+      type: Date,
+    },
+    refundedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    refundStatus: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected', 'completed'],
+    },
   },
   {
     timestamps: true,

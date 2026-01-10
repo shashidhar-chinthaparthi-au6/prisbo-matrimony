@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, FlatList, Image, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, FlatList, Image, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
 import { useQuery } from 'react-query';
 import { searchProfiles } from '../services/searchService';
 import { getMyProfile } from '../services/profileService';
@@ -19,6 +19,10 @@ const SearchScreen = ({ navigation }) => {
     state: '',
     education: '',
     occupation: '',
+    verificationStatus: '',
+    minIncome: '',
+    maxIncome: '',
+    sortBy: 'newest',
   });
   const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -298,6 +302,20 @@ const SearchScreen = ({ navigation }) => {
             value={filters.occupation}
             onChangeText={(text) => setFilters({ ...filters, occupation: text })}
           />
+          <TextInput
+            style={styles.input}
+            placeholder="Min Income (Lakhs)"
+            value={filters.minIncome}
+            onChangeText={(text) => setFilters({ ...filters, minIncome: text })}
+            keyboardType="numeric"
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Max Income (Lakhs)"
+            value={filters.maxIncome}
+            onChangeText={(text) => setFilters({ ...filters, maxIncome: text })}
+            keyboardType="numeric"
+          />
           <TouchableOpacity style={styles.searchButton} onPress={handleSearch}>
             <Text style={styles.searchButtonText}>Search</Text>
           </TouchableOpacity>
@@ -311,8 +329,44 @@ const SearchScreen = ({ navigation }) => {
           data={profiles}
           renderItem={renderProfile}
           keyExtractor={(item) => item._id}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={async () => {
+                setRefreshing(true);
+                await performSearch();
+                setRefreshing(false);
+              }}
+            />
+          }
           ListEmptyComponent={
-            <Text style={styles.emptyText}>No profiles found. Try adjusting your filters.</Text>
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyEmoji}>🔍</Text>
+              <Text style={styles.emptyTitle}>No Profiles Found</Text>
+              <Text style={styles.emptyText}>
+                We couldn't find any profiles matching your search. Try adjusting your filters or expanding your search criteria.
+              </Text>
+              <TouchableOpacity
+                style={styles.clearButton}
+                onPress={() => {
+                  setFilters({
+                    minAge: '',
+                    maxAge: '',
+                    city: '',
+                    state: '',
+                    education: '',
+                    occupation: '',
+                    verificationStatus: '',
+                    minIncome: '',
+                    maxIncome: '',
+                    sortBy: 'newest',
+                  });
+                  setTimeout(() => handleSearch(), 100);
+                }}
+              >
+                <Text style={styles.clearButtonText}>Clear Filters</Text>
+              </TouchableOpacity>
+            </View>
           }
         />
       )}

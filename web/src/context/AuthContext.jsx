@@ -48,8 +48,33 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  const updateUser = async () => {
+    try {
+      const data = await getMe();
+      setUser(data.user);
+      // Also update localStorage
+      if (data.user) {
+        localStorage.setItem('user', JSON.stringify(data.user));
+      }
+      return data.user;
+    } catch (error) {
+      console.error('Failed to update user:', error);
+      // Don't clear token on update failure, just log it
+      throw error;
+    }
+  };
+
+  // Optimistically update user (for immediate UI updates)
+  const updateUserOptimistically = (updates) => {
+    if (user) {
+      const updatedUser = { ...user, ...updates };
+      setUser(updatedUser);
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, loadUser }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, loadUser, updateUser, updateUserOptimistically }}>
       {children}
     </AuthContext.Provider>
   );

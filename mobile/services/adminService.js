@@ -97,3 +97,38 @@ export const getVerificationStats = async () => {
   return response.data;
 };
 
+export const bulkDeleteProfiles = async (profileIds) => {
+  const response = await api.delete('/admin/profiles/bulk-delete', { data: { profileIds } });
+  return response.data;
+};
+
+export const getDeletedProfiles = async (params) => {
+  const response = await api.get('/admin/profiles/deleted', { params });
+  return response.data;
+};
+
+export const restoreProfile = async (id) => {
+  const response = await api.put(`/admin/profiles/${id}/restore`);
+  return response.data;
+};
+
+export const bulkRestoreProfiles = async (profileIds) => {
+  const response = await api.put('/admin/profiles/bulk-restore', { profileIds });
+  return response.data;
+};
+
+export const getVendors = async (params) => {
+  const response = await api.get('/admin/vendors', { params });
+  return response.data;
+};
+
+export const createVendor = async (data) => {
+  const response = await api.post('/admin/vendors', data);
+  return response.data;
+};
+
+export const updateVendor = async (id, data) => {
+  const response = await api.put(`/admin/vendors/${id}`, data);
+  return response.data;
+};
+

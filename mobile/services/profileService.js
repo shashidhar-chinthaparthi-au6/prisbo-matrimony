@@ -47,3 +47,8 @@ export const setPrimaryPhoto = async (photoId) => {
   return response.data;
 };
 
+export const deleteProfile = async (profileId) => {
+  const response = await api.delete(`/profiles/${profileId}`);
+  return response.data;
+};
+

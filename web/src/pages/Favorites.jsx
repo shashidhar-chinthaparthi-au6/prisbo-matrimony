@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from 'react-query';
-import { getFavorites, removeFavorite } from '../services/favoriteService';
+import { getFavorites, removeFavorite, updateFavorite, exportFavorites } from '../services/favoriteService';
 import { getMyProfile } from '../services/profileService';
 import { getCurrentSubscription } from '../services/subscriptionService';
 import { getImageUrl } from '../config/api';
@@ -14,6 +14,9 @@ const Favorites = () => {
   const navigate = useNavigate();
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [showProfileIncompleteModal, setShowProfileIncompleteModal] = useState(false);
+  const [editingFavorite, setEditingFavorite] = useState(null);
+  const [editNotes, setEditNotes] = useState('');
+  const [editCategory, setEditCategory] = useState('general');
   
   const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
   const { data: profileData } = useQuery('myProfile', getMyProfile);
@@ -54,23 +57,100 @@ const Favorites = () => {
     }
   };
 
+  const handleEdit = (favorite) => {
+    setEditingFavorite(favorite._id);
+    setEditNotes(favorite.notes || '');
+    setEditCategory(favorite.category || 'general');
+  };
+
+  const handleSaveEdit = async (profileId) => {
+    try {
+      await updateFavorite(profileId, {
+        notes: editNotes,
+        category: editCategory,
+      });
+      toast.success('Favorite updated');
+      setEditingFavorite(null);
+      refetch();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to update favorite');
+    }
+  };
+
+  const handleExport = async (format) => {
+    try {
+      const response = await exportFavorites(format);
+      if (format === 'csv') {
+        const blob = new Blob([response], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `favorites-${Date.now()}.csv`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+      } else {
+        const blob = new Blob([JSON.stringify(response, null, 2)], { type: 'application/json' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `favorites-${Date.now()}.json`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+      }
+      toast.success('Favorites exported successfully');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to export favorites');
+    }
+  };
+
   if (!data?.favorites?.length) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-600">You haven't added any favorites yet.</p>
+        <div className="bg-white rounded-lg shadow p-8 max-w-md mx-auto">
+          <div className="text-6xl mb-4">⭐</div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">No Favorites Yet</h2>
+          <p className="text-gray-600 mb-6">
+            You haven't added any profiles to your favorites list. Start exploring profiles and add the ones you like!
+          </p>
+          <button
+            onClick={() => navigate('/search')}
+            className="px-6 py-3 bg-primary-600 text-white rounded-md hover:bg-primary-700 font-medium"
+          >
+            Browse Profiles
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">Favorites ({data.count})</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Favorites ({data.count})</h1>
+        <div className="flex space-x-2">
+          <button
+            onClick={() => handleExport('json')}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            Export JSON
+          </button>
+          <button
+            onClick={() => handleExport('csv')}
+            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+          >
+            Export CSV
+          </button>
+        </div>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {data.favorites.map((favorite) => {
           const profile = favorite.profileId;
           return (
-            <div key={favorite._id} className="bg-white rounded-lg shadow overflow-hidden">
-              <div className="h-48 bg-gray-200 relative">
+            <div key={favorite._id} className="bg-white rounded-lg shadow overflow-hidden cursor-pointer hover:shadow-lg transition-shadow">
+              <div 
+                className="h-48 bg-gray-200 relative cursor-pointer"
+                onClick={() => navigate(`/profiles/${profile._id}`)}
+              >
                 {profile.photos?.[0]?.url ? (
                   <img
                     src={getImageUrl(profile.photos[0].url)}
@@ -84,26 +164,91 @@ const Favorites = () => {
                 )}
               </div>
               <div className="p-4">
-                <h3 className="font-semibold text-lg">
-                  {profile.personalInfo?.firstName} {profile.personalInfo?.lastName}
-                </h3>
-                <p className="text-gray-600 text-sm">
-                  {profile.personalInfo?.age} years, {profile.location?.city}
-                </p>
-                <div className="mt-4 flex space-x-2">
-                  <Link
-                    to={`/profiles/${profile._id}`}
-                    className="flex-1 text-center px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
-                  >
-                    View Profile
-                  </Link>
-                  <button
-                    onClick={() => handleRemove(profile._id)}
-                    className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
-                  >
-                    Remove
-                  </button>
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <h3 
+                      className="font-semibold text-lg cursor-pointer hover:text-primary-600 transition-colors"
+                      onClick={() => navigate(`/profiles/${profile._id}`)}
+                    >
+                      {profile.personalInfo?.firstName} {profile.personalInfo?.lastName}
+                    </h3>
+                    <p className="text-gray-600 text-sm">
+                      {profile.personalInfo?.age} years, {profile.location?.city}
+                    </p>
+                  </div>
+                  {favorite.category && (
+                    <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                      {favorite.category}
+                    </span>
+                  )}
                 </div>
+                {editingFavorite === favorite._id ? (
+                  <div className="mt-2 space-y-2">
+                    <select
+                      value={editCategory}
+                      onChange={(e) => setEditCategory(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                    >
+                      <option value="general">General</option>
+                      <option value="shortlisted">Shortlisted</option>
+                      <option value="maybe">Maybe</option>
+                      <option value="contacted">Contacted</option>
+                    </select>
+                    <textarea
+                      value={editNotes}
+                      onChange={(e) => setEditNotes(e.target.value)}
+                      placeholder="Add notes..."
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                      rows="2"
+                    />
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => handleSaveEdit(profile._id)}
+                        className="flex-1 px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => setEditingFavorite(null)}
+                        className="flex-1 px-3 py-1 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 text-sm"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {favorite.notes && (
+                      <p className="text-sm text-gray-600 mt-2 italic">"{favorite.notes}"</p>
+                    )}
+                    <div className="mt-4 flex space-x-2">
+                      <Link
+                        to={`/profiles/${profile._id}`}
+                        className="flex-1 text-center px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
+                      >
+                        View Profile
+                      </Link>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEdit(favorite);
+                        }}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemove(profile._id);
+                        }}
+                        className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           );

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { useAuth } from '../context/AuthContext';
-import { getPlans, getCurrentSubscription, getSubscriptionHistory, subscribe, upgradeSubscription, uploadPaymentProof, getInvoice } from '../services/subscriptionService';
+import { getPlans, getCurrentSubscription, getSubscriptionHistory, subscribe, upgradeSubscription, downgradeSubscription, uploadPaymentProof, getInvoice, toggleAutoRenew, retryPayment, pauseSubscription, resumeSubscription, exportPaymentHistory } from '../services/subscriptionService';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
@@ -133,6 +133,55 @@ const Subscription = () => {
     });
   };
 
+  const handleUpgrade = () => {
+    if (!selectedPlan) {
+      toast.error('Please select a plan');
+      return;
+    }
+    if (!paymentMethod) {
+      toast.error('Please select a payment method');
+      return;
+    }
+    if (paymentMethod === 'upi' && !screenshot) {
+      toast.error('Please upload payment screenshot');
+      return;
+    }
+    upgradeMutation.mutate({
+      planId: selectedPlan._id,
+      paymentMethod,
+      upiAmount: paymentMethod === 'upi' ? selectedPlan.price : paymentMethod === 'mixed' ? parseFloat(upiAmount) : undefined,
+      cashAmount: paymentMethod === 'cash' ? selectedPlan.price : paymentMethod === 'mixed' ? parseFloat(cashAmount) : undefined,
+      upiTransactionId: paymentMethod === 'upi' || paymentMethod === 'mixed' ? upiTransactionId : undefined,
+    });
+  };
+
+  const handleDowngrade = () => {
+    if (!selectedPlan) {
+      toast.error('Please select a plan');
+      return;
+    }
+    downgradeMutation.mutate({
+      planId: selectedPlan._id,
+    });
+  };
+
+  const handleRetryPayment = () => {
+    if (!paymentMethod) {
+      toast.error('Please select a payment method');
+      return;
+    }
+    if (paymentMethod === 'upi' && !screenshot) {
+      toast.error('Please upload payment screenshot');
+      return;
+    }
+    retryPaymentMutation.mutate({
+      paymentMethod,
+      upiAmount: paymentMethod === 'upi' ? selectedPlan.price : paymentMethod === 'mixed' ? parseFloat(upiAmount) : undefined,
+      cashAmount: paymentMethod === 'cash' ? selectedPlan.price : paymentMethod === 'mixed' ? parseFloat(cashAmount) : undefined,
+      upiTransactionId: paymentMethod === 'upi' || paymentMethod === 'mixed' ? upiTransactionId : undefined,
+    });
+  };
+
   const currentSubscription = currentSubscriptionData?.subscription;
   const hasActiveSubscription = currentSubscriptionData?.hasActiveSubscription;
 
@@ -204,6 +253,114 @@ const Subscription = () => {
                 <p className="text-red-600 text-sm mt-2">
                   Rejection reason: {currentSubscription.rejectionReason}
                 </p>
+              )}
+              {/* Expiry Warning */}
+              {currentSubscriptionData?.isExpiringSoon && currentSubscriptionData?.daysUntilExpiry !== null && (
+                <div className={`mt-4 p-3 rounded-md ${
+                  currentSubscriptionData.daysUntilExpiry <= 1 
+                    ? 'bg-red-100 border border-red-300' 
+                    : currentSubscriptionData.daysUntilExpiry <= 3
+                    ? 'bg-orange-100 border border-orange-300'
+                    : 'bg-yellow-100 border border-yellow-300'
+                }`}>
+                  <p className={`text-sm font-medium ${
+                    currentSubscriptionData.daysUntilExpiry <= 1 
+                      ? 'text-red-800' 
+                      : currentSubscriptionData.daysUntilExpiry <= 3
+                      ? 'text-orange-800'
+                      : 'text-yellow-800'
+                  }`}>
+                    ⚠️ Your subscription expires in {currentSubscriptionData.daysUntilExpiry} day{currentSubscriptionData.daysUntilExpiry !== 1 ? 's' : ''}. Please renew soon!
+                  </p>
+                </div>
+              )}
+              {/* Grace Period Notice */}
+              {currentSubscriptionData?.isInGracePeriod && (
+                <div className="mt-4 p-3 rounded-md bg-blue-100 border border-blue-300">
+                  <p className="text-sm font-medium text-blue-800">
+                    ℹ️ Your subscription has expired but you're in a grace period. Please renew to continue using all features.
+                  </p>
+                </div>
+              )}
+              {/* Pause/Resume Subscription */}
+              {hasActiveSubscription && currentSubscription && (
+                <div className="mt-4 flex gap-2">
+                  {currentSubscription.isPaused ? (
+                    <button
+                      onClick={async () => {
+                        try {
+                          await resumeSubscription();
+                          toast.success('Subscription resumed successfully');
+                          queryClient.invalidateQueries('current-subscription');
+                        } catch (error) {
+                          toast.error(error.response?.data?.message || 'Failed to resume subscription');
+                        }
+                      }}
+                      className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                    >
+                      ▶️ Resume Subscription
+                    </button>
+                  ) : (
+                    <button
+                      onClick={async () => {
+                        if (window.confirm('Are you sure you want to pause your subscription? It will be extended by the remaining days.')) {
+                          try {
+                            await pauseSubscription();
+                            toast.success('Subscription paused successfully');
+                            queryClient.invalidateQueries('current-subscription');
+                          } catch (error) {
+                            toast.error(error.response?.data?.message || 'Failed to pause subscription');
+                          }
+                        }
+                      }}
+                      className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700"
+                    >
+                      ⏸️ Pause Subscription
+                    </button>
+                  )}
+                </div>
+              )}
+              {/* Auto-Renewal Toggle */}
+              {hasActiveSubscription && currentSubscription && (
+                <div className="mt-4 flex items-center justify-between p-3 bg-gray-50 rounded-md">
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Auto-Renewal</p>
+                    <p className="text-xs text-gray-500">Automatically renew your subscription when it expires</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={currentSubscription.autoRenew || false}
+                      onChange={async (e) => {
+                        try {
+                          await toggleAutoRenew(e.target.checked);
+                          toast.success(`Auto-renewal ${e.target.checked ? 'enabled' : 'disabled'}`);
+                          refetchSubscription();
+                        } catch (error) {
+                          toast.error(error.response?.data?.message || 'Failed to update auto-renewal');
+                        }
+                      }}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
+                  </label>
+                </div>
+              )}
+              {/* Retry Payment Button for Rejected Subscriptions */}
+              {currentSubscription.status === 'rejected' && (
+                <button
+                  onClick={() => {
+                    // Show retry payment form
+                    setSelectedPlan(plansData?.plans?.find(p => p.name === currentSubscription.planName));
+                    setPaymentMethod(currentSubscription.paymentMethod);
+                    setUpiAmount(currentSubscription.upiAmount?.toString() || '');
+                    setCashAmount(currentSubscription.cashAmount?.toString() || '');
+                    setUpiTransactionId(currentSubscription.upiTransactionId || '');
+                  }}
+                  className="mt-4 w-full px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                >
+                  Retry Payment
+                </button>
               )}
             </div>
           </div>
@@ -599,12 +756,29 @@ const Subscription = () => {
         <div className="bg-white rounded-lg shadow p-6 mt-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold">Subscription History</h2>
-            <button
-              onClick={() => setShowHistory(!showHistory)}
-              className="text-red-600 hover:text-red-700 font-medium"
-            >
-              {showHistory ? 'Hide' : 'Show'} History
-            </button>
+            <div className="flex gap-2">
+              {showHistory && historyData?.subscriptions?.length > 0 && (
+                <button
+                  onClick={async () => {
+                    try {
+                      await exportPaymentHistory();
+                      toast.success('Payment history exported successfully');
+                    } catch (error) {
+                      toast.error('Failed to export payment history');
+                    }
+                  }}
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-medium"
+                >
+                  📥 Export CSV
+                </button>
+              )}
+              <button
+                onClick={() => setShowHistory(!showHistory)}
+                className="text-red-600 hover:text-red-700 font-medium"
+              >
+                {showHistory ? 'Hide' : 'Show'} History
+              </button>
+            </div>
           </div>
 
           {showHistory && (

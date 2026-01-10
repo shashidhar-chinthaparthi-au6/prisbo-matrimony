@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Image } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Image, RefreshControl, Alert } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 import { useQuery } from 'react-query';
 import { getFavorites, removeFavorite } from '../services/favoriteService';
 import { getCurrentSubscription } from '../services/subscriptionService';
@@ -15,6 +16,10 @@ const FavoritesScreen = ({ navigation }) => {
   const [count, setCount] = useState(0);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [showProfileIncompleteModal, setShowProfileIncompleteModal] = useState(false);
+  const [editingFavorite, setEditingFavorite] = useState(null);
+  const [editNotes, setEditNotes] = useState('');
+  const [editCategory, setEditCategory] = useState('general');
+  const [refreshing, setRefreshing] = useState(false);
 
   const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
   const { data: profileData } = useQuery('myProfile', getMyProfile);
@@ -70,12 +75,84 @@ const FavoritesScreen = ({ navigation }) => {
     }
   };
 
+  const handleEdit = (favorite) => {
+    setEditingFavorite(favorite._id);
+    setEditNotes(favorite.notes || '');
+    setEditCategory(favorite.category || 'general');
+  };
+
+  const handleSaveEdit = async (profileId) => {
+    try {
+      await updateFavorite(profileId, {
+        notes: editNotes,
+        category: editCategory,
+      });
+      alert('Favorite updated');
+      setEditingFavorite(null);
+      loadFavorites();
+    } catch (error) {
+      alert(error.response?.data?.message || 'Failed to update favorite');
+    }
+  };
+
+  const handleExport = async (format) => {
+    try {
+      const response = await exportFavorites(format);
+      // For mobile, we'll show the data in an alert or copy to clipboard
+      // In a real app, you might use a file sharing library
+      if (format === 'json') {
+        const jsonStr = JSON.stringify(response, null, 2);
+        alert(`Favorites exported! Data:\n\n${jsonStr.substring(0, 500)}...`);
+      } else {
+        alert('CSV export ready! (In production, this would download the file)');
+      }
+    } catch (error) {
+      alert(error.response?.data?.message || 'Failed to export favorites');
+    }
+  };
+
   const renderFavoriteItem = ({ item }) => {
     const profile = item.profileId;
+    const isEditing = editingFavorite === item._id;
+    
+    const renderRightActions = () => (
+      <View style={styles.swipeActions}>
+        <TouchableOpacity
+          style={[styles.swipeAction, styles.swipeEdit]}
+          onPress={() => handleEdit(item)}
+        >
+          <Text style={styles.swipeActionText}>Edit</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.swipeAction, styles.swipeDelete]}
+          onPress={() => {
+            Alert.alert(
+              'Remove Favorite',
+              'Are you sure you want to remove this profile from favorites?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Remove', style: 'destructive', onPress: () => handleRemove(profile._id) },
+              ]
+            );
+          }}
+        >
+          <Text style={styles.swipeActionText}>Remove</Text>
+        </TouchableOpacity>
+      </View>
+    );
     
     return (
-      <View style={styles.favoriteCard}>
-        <View style={styles.imageContainer}>
+      <Swipeable renderRightActions={renderRightActions}>
+        <TouchableOpacity 
+          style={styles.favoriteCard}
+          onPress={() => !isEditing && navigation.navigate('ProfileDetail', { id: profile._id })}
+          activeOpacity={0.9}
+        >
+        <TouchableOpacity
+          style={styles.imageContainer}
+          onPress={() => navigation.navigate('ProfileDetail', { id: profile._id })}
+          activeOpacity={0.8}
+        >
           {profile.photos?.[0]?.url ? (
             <Image
               source={{ uri: getImageUrl(profile.photos[0].url) }}
@@ -86,30 +163,89 @@ const FavoritesScreen = ({ navigation }) => {
               <Text style={styles.placeholderText}>No Photo</Text>
             </View>
           )}
-        </View>
+        </TouchableOpacity>
         <View style={styles.cardContent}>
-          <Text style={styles.profileName}>
-            {profile.personalInfo?.firstName} {profile.personalInfo?.lastName}
-          </Text>
-          <Text style={styles.profileInfo}>
-            {profile.personalInfo?.age} years, {profile.location?.city}
-          </Text>
-          <View style={styles.cardActions}>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.viewButton]}
-              onPress={() => navigation.navigate('ProfileDetail', { id: profile._id })}
-            >
-              <Text style={styles.actionButtonText}>View Profile</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.removeButton]}
-              onPress={() => handleRemove(profile._id)}
-            >
-              <Text style={styles.actionButtonText}>Remove</Text>
-            </TouchableOpacity>
+          <View style={styles.profileHeader}>
+            <View style={styles.profileHeaderLeft}>
+              <TouchableOpacity
+                onPress={() => !isEditing && navigation.navigate('ProfileDetail', { id: profile._id })}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.profileName}>
+                  {profile.personalInfo?.firstName} {profile.personalInfo?.lastName}
+                </Text>
+              </TouchableOpacity>
+              <Text style={styles.profileInfo}>
+                {profile.personalInfo?.age} years, {profile.location?.city}
+              </Text>
+            </View>
+            {item.category && (
+              <View style={styles.categoryBadge}>
+                <Text style={styles.categoryText}>{item.category}</Text>
+              </View>
+            )}
           </View>
+          {isEditing ? (
+            <View style={styles.editContainer}>
+              <TextInput
+                style={styles.categoryInput}
+                value={editCategory}
+                onChangeText={setEditCategory}
+                placeholder="Category"
+              />
+              <TextInput
+                style={styles.notesInput}
+                value={editNotes}
+                onChangeText={setEditNotes}
+                placeholder="Add notes..."
+                multiline
+                numberOfLines={3}
+              />
+              <View style={styles.editActions}>
+                <TouchableOpacity
+                  style={[styles.editButton, styles.saveButton]}
+                  onPress={() => handleSaveEdit(profile._id)}
+                >
+                  <Text style={styles.editButtonText}>Save</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.editButton, styles.cancelButton]}
+                  onPress={() => setEditingFavorite(null)}
+                >
+                  <Text style={styles.editButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <>
+              {item.notes && (
+                <Text style={styles.notesText}>"{item.notes}"</Text>
+              )}
+              <View style={styles.cardActions}>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.viewButton]}
+                  onPress={() => navigation.navigate('ProfileDetail', { id: profile._id })}
+                >
+                  <Text style={styles.actionButtonText}>View</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.editButton]}
+                  onPress={() => handleEdit(item)}
+                >
+                  <Text style={styles.actionButtonText}>Edit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.removeButton]}
+                  onPress={() => handleRemove(profile._id)}
+                >
+                  <Text style={styles.actionButtonText}>Remove</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
         </View>
-      </View>
+      </TouchableOpacity>
+      </Swipeable>
     );
   };
 
@@ -126,7 +262,17 @@ const FavoritesScreen = ({ navigation }) => {
       
       {favorites.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>You haven't added any favorites yet.</Text>
+          <Text style={styles.emptyEmoji}>⭐</Text>
+          <Text style={styles.emptyTitle}>No Favorites Yet</Text>
+          <Text style={styles.emptyText}>
+            You haven't added any profiles to your favorites. Start exploring and add the ones you like!
+          </Text>
+          <TouchableOpacity
+            style={styles.browseButton}
+            onPress={() => navigation.navigate('Search')}
+          >
+            <Text style={styles.browseButtonText}>Browse Profiles</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <FlatList
@@ -136,6 +282,16 @@ const FavoritesScreen = ({ navigation }) => {
           numColumns={2}
           columnWrapperStyle={styles.row}
           contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={async () => {
+                setRefreshing(true);
+                await loadFavorites();
+                setRefreshing(false);
+              }}
+            />
+          }
         />
       )}
 
@@ -233,6 +389,30 @@ const styles = StyleSheet.create({
     backgroundColor: '#dc2626',
   },
   actionButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 12,
+  },
+  swipeActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingRight: 10,
+  },
+  swipeAction: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 80,
+    height: '100%',
+    paddingHorizontal: 10,
+  },
+  swipeEdit: {
+    backgroundColor: '#3b82f6',
+  },
+  swipeDelete: {
+    backgroundColor: '#dc2626',
+  },
+  swipeActionText: {
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 12,

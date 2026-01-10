@@ -9,7 +9,19 @@ const notificationSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ['interest_sent', 'interest_accepted', 'interest_rejected', 'new_message', 'profile_view'],
+      enum: [
+        'interest_sent',
+        'interest_accepted',
+        'interest_rejected',
+        'new_message',
+        'profile_view',
+        'support_message',
+        'profile_approved',
+        'profile_rejected',
+        'subscription_approved',
+        'subscription_rejected',
+        'vendor_created',
+      ],
       required: true,
     },
     title: {

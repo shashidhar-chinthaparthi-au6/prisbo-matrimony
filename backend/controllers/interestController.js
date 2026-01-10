@@ -18,6 +18,7 @@ export const sendInterest = async (req, res) => {
       });
     }
 
+    // Prevent self-interest
     if (fromUserId === toUserId) {
       return res.status(400).json({
         success: false,
@@ -25,7 +26,55 @@ export const sendInterest = async (req, res) => {
       });
     }
 
-    // Check if interest already exists
+    // Check if target user exists and is active
+    const User = (await import('../models/User.js')).default;
+    const targetUser = await User.findById(toUserId);
+    if (!targetUser) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+      });
+    }
+    if (!targetUser.isActive) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot send interest to an inactive user',
+      });
+    }
+
+    // Check if target user has blocked the sender
+    if (targetUser.blockedUsers?.includes(fromUserId)) {
+      return res.status(403).json({
+        success: false,
+        message: 'You have been blocked by this user',
+      });
+    }
+
+    // Check if sender has blocked the target user
+    const senderUser = await User.findById(fromUserId);
+    if (senderUser?.blockedUsers?.includes(toUserId)) {
+      return res.status(403).json({
+        success: false,
+        message: 'You have blocked this user',
+      });
+    }
+
+    // Check if target profile exists and is verified
+    const targetProfile = await Profile.findOne({ userId: toUserId });
+    if (!targetProfile) {
+      return res.status(404).json({
+        success: false,
+        message: 'Profile not found for this user',
+      });
+    }
+    if (targetProfile.verificationStatus !== 'approved') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot send interest to an unverified profile',
+      });
+    }
+
+    // Check if interest already exists (including pending, accepted, or rejected)
     const existingInterest = await Interest.findOne({
       $or: [
         { fromUserId, toUserId },
@@ -34,11 +83,27 @@ export const sendInterest = async (req, res) => {
     });
 
     if (existingInterest) {
-      return res.status(400).json({
-        success: false,
-        message: 'Interest already exists',
-        interest: existingInterest,
-      });
+      if (existingInterest.status === 'pending') {
+        return res.status(400).json({
+          success: false,
+          message: 'Interest already sent and pending',
+          interest: existingInterest,
+        });
+      }
+      if (existingInterest.status === 'accepted') {
+        return res.status(400).json({
+          success: false,
+          message: 'Interest already accepted. You can start chatting!',
+          interest: existingInterest,
+        });
+      }
+      if (existingInterest.status === 'rejected') {
+        return res.status(400).json({
+          success: false,
+          message: 'Interest was previously rejected',
+          interest: existingInterest,
+        });
+      }
     }
 
     // Create interest
@@ -208,9 +273,26 @@ export const getSentInterests = async (req, res) => {
     const interestsWithProfiles = await Promise.all(
       interests.map(async (interest) => {
         const profile = await Profile.findOne({ userId: interest.toUserId._id });
+        const myProfile = await Profile.findOne({ userId: req.user.id });
+        
+        // Calculate compatibility score
+        const { calculateCompatibility, getMutualInterests } = await import('../utils/compatibilityCalculator.js');
+        const compatibility = myProfile && profile ? await calculateCompatibility(myProfile._id, profile._id) : 0;
+        const mutual = myProfile && profile ? getMutualInterests(myProfile, profile) : [];
+        
+        // Check if expired
+        const isExpired = interest.expiresAt && new Date(interest.expiresAt) <= new Date() && interest.status === 'pending';
+        const daysUntilExpiry = interest.expiresAt && interest.status === 'pending'
+          ? Math.ceil((new Date(interest.expiresAt) - new Date()) / (1000 * 60 * 60 * 24))
+          : null;
+
         return {
           ...interest.toObject(),
           profile,
+          compatibility,
+          mutualInterests: mutual,
+          isExpired,
+          daysUntilExpiry,
         };
       })
     );
@@ -240,9 +322,26 @@ export const getReceivedInterests = async (req, res) => {
     const interestsWithProfiles = await Promise.all(
       interests.map(async (interest) => {
         const profile = await Profile.findOne({ userId: interest.fromUserId._id });
+        const myProfile = await Profile.findOne({ userId: req.user.id });
+        
+        // Calculate compatibility score
+        const { calculateCompatibility, getMutualInterests } = await import('../utils/compatibilityCalculator.js');
+        const compatibility = myProfile && profile ? await calculateCompatibility(myProfile._id, profile._id) : 0;
+        const mutual = myProfile && profile ? getMutualInterests(myProfile, profile) : [];
+        
+        // Check if expired
+        const isExpired = interest.expiresAt && new Date(interest.expiresAt) <= new Date() && interest.status === 'pending';
+        const daysUntilExpiry = interest.expiresAt && interest.status === 'pending'
+          ? Math.ceil((new Date(interest.expiresAt) - new Date()) / (1000 * 60 * 60 * 24))
+          : null;
+
         return {
           ...interest.toObject(),
           profile,
+          compatibility,
+          mutualInterests: mutual,
+          isExpired,
+          daysUntilExpiry,
         };
       })
     );
@@ -280,9 +379,18 @@ export const getMutualMatches = async (req, res) => {
             ? match.toUserId._id
             : match.fromUserId._id;
         const profile = await Profile.findOne({ userId: otherUserId });
+        const myProfile = await Profile.findOne({ userId: req.user.id });
+        
+        // Calculate compatibility score
+        const { calculateCompatibility, getMutualInterests } = await import('../utils/compatibilityCalculator.js');
+        const compatibility = myProfile && profile ? await calculateCompatibility(myProfile._id, profile._id) : 0;
+        const mutual = myProfile && profile ? getMutualInterests(myProfile, profile) : [];
+
         return {
           ...match.toObject(),
           profile,
+          compatibility,
+          mutualInterests: mutual,
         };
       })
     );
@@ -290,6 +398,237 @@ export const getMutualMatches = async (req, res) => {
     res.status(200).json({
       success: true,
       matches: matchesWithProfiles,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Get interest history with a specific user
+// @route   GET /api/interests/history/:userId
+// @access  Private
+export const getInterestHistory = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const currentUserId = req.user.id;
+
+    // Get all interests between current user and target user (both directions)
+    const interests = await Interest.find({
+      $or: [
+        { fromUserId: currentUserId, toUserId: userId },
+        { fromUserId: userId, toUserId: currentUserId },
+      ],
+    })
+      .populate('fromUserId', 'email phone')
+      .populate('toUserId', 'email phone')
+      .sort({ createdAt: -1 });
+
+    // Get profiles
+    const currentUserProfile = await Profile.findOne({ userId: currentUserId });
+    const targetUserProfile = await Profile.findOne({ userId });
+
+    // Calculate compatibility
+    const { calculateCompatibility, getMutualInterests } = await import('../utils/compatibilityCalculator.js');
+    const compatibility = currentUserProfile && targetUserProfile
+      ? await calculateCompatibility(currentUserProfile._id, targetUserProfile._id)
+      : 0;
+    const mutual = currentUserProfile && targetUserProfile
+      ? getMutualInterests(currentUserProfile, targetUserProfile)
+      : [];
+
+    res.status(200).json({
+      success: true,
+      interests,
+      compatibility,
+      mutualInterests: mutual,
+      timeline: interests.map(interest => ({
+        date: interest.createdAt,
+        action: interest.fromUserId._id.toString() === currentUserId
+          ? interest.status === 'pending' ? 'sent' : interest.status === 'accepted' ? 'accepted_by_them' : 'rejected_by_them'
+          : interest.status === 'pending' ? 'received' : interest.status === 'accepted' ? 'accepted_by_you' : 'rejected_by_you',
+        status: interest.status,
+        message: interest.message,
+      })),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Withdraw interest
+// @route   DELETE /api/interests/:id
+// @access  Private
+export const withdrawInterest = async (req, res) => {
+  try {
+    const interest = await Interest.findById(req.params.id);
+
+    if (!interest) {
+      return res.status(404).json({
+        success: false,
+        message: 'Interest not found',
+      });
+    }
+
+    // Check if user is the sender
+    if (interest.fromUserId.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to withdraw this interest',
+      });
+    }
+
+    // Can only withdraw if status is pending
+    if (interest.status !== 'pending') {
+      return res.status(400).json({
+        success: false,
+        message: 'Can only withdraw pending interests',
+      });
+    }
+
+    await Interest.findByIdAndDelete(req.params.id);
+
+    res.status(200).json({
+      success: true,
+      message: 'Interest withdrawn successfully',
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Bulk accept interests
+// @route   POST /api/interests/bulk-accept
+// @access  Private
+export const bulkAcceptInterests = async (req, res) => {
+  try {
+    const { interestIds } = req.body;
+
+    if (!interestIds || !Array.isArray(interestIds) || interestIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide an array of interest IDs',
+      });
+    }
+
+    const interests = await Interest.find({
+      _id: { $in: interestIds },
+      toUserId: req.user.id,
+      status: 'pending',
+    });
+
+    if (interests.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No valid interests found to accept',
+      });
+    }
+
+    // Accept all interests
+    await Interest.updateMany(
+      { _id: { $in: interests.map(i => i._id) } },
+      { status: 'accepted' }
+    );
+
+    // Create notifications and chats for each accepted interest
+    for (const interest of interests) {
+      const receiverProfile = await Profile.findOne({ userId: interest.toUserId });
+      
+      await Notification.create({
+        userId: interest.fromUserId,
+        type: 'interest_accepted',
+        title: 'Interest Accepted',
+        message: `${receiverProfile?.personalInfo?.firstName || 'Someone'} accepted your interest`,
+        relatedUserId: interest.toUserId,
+        relatedProfileId: receiverProfile?._id,
+        relatedInterestId: interest._id,
+      });
+
+      // Create chat room if it doesn't exist
+      const chat = await Chat.findOne({
+        participants: { $all: [interest.fromUserId, interest.toUserId] },
+      });
+
+      if (!chat) {
+        await Chat.create({
+          participants: [interest.fromUserId, interest.toUserId],
+        });
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `${interests.length} interest(s) accepted successfully`,
+      count: interests.length,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Bulk reject interests
+// @route   POST /api/interests/bulk-reject
+// @access  Private
+export const bulkRejectInterests = async (req, res) => {
+  try {
+    const { interestIds } = req.body;
+
+    if (!interestIds || !Array.isArray(interestIds) || interestIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide an array of interest IDs',
+      });
+    }
+
+    const interests = await Interest.find({
+      _id: { $in: interestIds },
+      toUserId: req.user.id,
+      status: 'pending',
+    });
+
+    if (interests.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No valid interests found to reject',
+      });
+    }
+
+    // Reject all interests
+    await Interest.updateMany(
+      { _id: { $in: interests.map(i => i._id) } },
+      { status: 'rejected' }
+    );
+
+    // Create notifications for each rejected interest
+    for (const interest of interests) {
+      const receiverProfile = await Profile.findOne({ userId: interest.toUserId });
+      
+      await Notification.create({
+        userId: interest.fromUserId,
+        type: 'interest_rejected',
+        title: 'Interest Rejected',
+        message: `${receiverProfile?.personalInfo?.firstName || 'Someone'} rejected your interest`,
+        relatedUserId: interest.toUserId,
+        relatedProfileId: receiverProfile?._id,
+        relatedInterestId: interest._id,
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `${interests.length} interest(s) rejected successfully`,
+      count: interests.length,
     });
   } catch (error) {
     res.status(500).json({

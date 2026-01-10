@@ -16,11 +16,11 @@ const createAdmin = async () => {
     // Check if user with email/phone exists
     const existingUser = await User.findOne({ $or: [{ email }, { phone }] });
     if (existingUser) {
-      // Update existing user to admin and reset password
-      existingUser.role = 'admin';
+      // Update existing user to super admin and reset password
+      existingUser.role = 'super_admin';
       existingUser.password = password; // This will be hashed by the pre-save hook
       await existingUser.save();
-      console.log('Updated existing user to admin:');
+      console.log('Updated existing user to super admin:');
       console.log(`Email: ${existingUser.email}`);
       console.log(`Phone: ${existingUser.phone}`);
       console.log(`Password: ${password}`);
@@ -28,24 +28,24 @@ const createAdmin = async () => {
       process.exit(0);
     }
 
-    // Check if admin already exists (but we're creating a new one)
-    const existingAdmin = await User.findOne({ role: 'admin' });
+    // Check if super admin already exists (but we're creating a new one)
+    const existingAdmin = await User.findOne({ role: 'super_admin' });
     if (existingAdmin) {
-      console.log('Note: Another admin account already exists:');
+      console.log('Note: Another super admin account already exists:');
       console.log(`Email: ${existingAdmin.email}`);
       console.log(`Phone: ${existingAdmin.phone}`);
-      console.log('\nCreating new admin account...\n');
+      console.log('\nCreating new super admin account...\n');
     }
 
-    // Create new admin user
+    // Create new super admin user
     const admin = await User.create({
       email,
       phone,
       password,
-      role: 'admin',
+      role: 'super_admin',
     });
 
-    console.log('Admin account created successfully!');
+    console.log('Super Admin account created successfully!');
     console.log(`Email: ${admin.email}`);
     console.log(`Phone: ${admin.phone}`);
     console.log(`Password: ${password}`);
