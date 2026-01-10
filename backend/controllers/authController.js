@@ -9,7 +9,7 @@ import { sendEmail } from '../utils/sendEmail.js';
 // @access  Public
 export const register = async (req, res) => {
   try {
-    const { email, phone, password, type } = req.body;
+    const { email, phone, password, type, vendorId } = req.body;
 
     // Validation
     if (!email || !phone || !password) {
@@ -28,12 +28,26 @@ export const register = async (req, res) => {
       });
     }
 
+    // If vendorId is provided, validate it (vendorId should be the vendor's _id from verification)
+    let registeredViaVendor = null;
+    if (vendorId) {
+      const vendor = await User.findById(vendorId);
+      if (!vendor || vendor.role !== 'vendor' || !vendor.isActive) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid or inactive vendor. Please verify the vendor mobile number again.',
+        });
+      }
+      registeredViaVendor = vendorId;
+    }
+
     // Create user
     const user = await User.create({
       email,
       phone,
       password,
       profileType: type, // Store type selected during registration
+      registeredViaVendor, // Store vendor ID if provided
     });
 
     const token = generateToken(user._id);
@@ -133,6 +147,56 @@ export const login = async (req, res) => {
     res.status(500).json({
       success: false,
       message: error.message,
+    });
+  }
+};
+
+// @desc    Verify vendor by mobile number
+// @route   POST /api/auth/verify-vendor
+// @access  Public
+export const verifyVendor = async (req, res) => {
+  try {
+    const { mobile } = req.body;
+
+    if (!mobile) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mobile number is required',
+      });
+    }
+
+    // Find vendor by phone number
+    const vendor = await User.findOne({ 
+      phone: mobile,
+      role: 'vendor',
+      isActive: true,
+    }).select('_id email phone companyName firstName lastName');
+
+    if (!vendor) {
+      return res.status(404).json({
+        success: false,
+        message: 'No active vendor found with this mobile number',
+        verified: false,
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      verified: true,
+      vendor: {
+        id: vendor._id,
+        companyName: vendor.companyName,
+        contactPerson: vendor.firstName && vendor.lastName 
+          ? `${vendor.firstName} ${vendor.lastName}` 
+          : vendor.email,
+        phone: vendor.phone,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+      verified: false,
     });
   }
 };

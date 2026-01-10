@@ -5,6 +5,11 @@ export const register = async (data) => {
   return response.data;
 };
 
+export const verifyVendor = async (mobile) => {
+  const response = await api.post('/auth/verify-vendor', { mobile });
+  return response.data;
+};
+
 export const login = async (data) => {
   const response = await api.post('/auth/login', data);
   return response.data;

@@ -11,6 +11,7 @@ import {
   updateContact,
   updatePrivacySettings,
   downloadUserData,
+  verifyVendor,
 } from '../controllers/authController.js';
 import { protect } from '../middleware/auth.js';
 
@@ -18,6 +19,7 @@ const router = express.Router();
 
 router.post('/register', register);
 router.post('/login', login);
+router.post('/verify-vendor', verifyVendor);
 router.get('/me', protect, getMe);
 router.post('/forgotpassword', forgotPassword);
 router.put('/resetpassword/:resettoken', resetPassword);

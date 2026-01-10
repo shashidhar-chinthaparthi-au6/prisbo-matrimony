@@ -8,6 +8,18 @@ const Layout = ({ children }) => {
   const { user, logout } = useAuth();
   const location = useLocation();
   
+  // Pages that should not use Layout (full-screen pages)
+  const noLayoutPages = ['/login', '/register', '/forgot-password'];
+  const isNoLayoutPage = noLayoutPages.some(path => location.pathname.startsWith(path));
+  
+  // Also don't show layout for Home page when user is not logged in
+  const isPublicHome = !user && location.pathname === '/';
+  
+  // If this is a no-layout page or public home, render children without layout
+  if (isNoLayoutPage || isPublicHome) {
+    return <>{children}</>;
+  }
+  
   const { data: notificationsData } = useQuery(
     'notifications-count',
     () => getNotifications({ limit: 1, unreadOnly: true }),
@@ -36,7 +48,7 @@ const Layout = ({ children }) => {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 overflow-x-hidden">
       {/* Skip to main content for accessibility */}
       <a href="#main-content" className="skip-to-main">
         Skip to main content
@@ -137,7 +149,7 @@ const Layout = ({ children }) => {
       </nav>
 
       {/* Main Content */}
-      <main id="main-content" className="w-full px-4 sm:px-6 lg:px-8 py-8 pb-20 md:pb-8" role="main">
+      <main id="main-content" className="w-full min-h-[calc(100vh-4rem)] px-4 sm:px-6 lg:px-8 py-8 pb-20 md:pb-8" role="main">
         <Breadcrumb />
         {children}
       </main>

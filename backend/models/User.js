@@ -95,6 +95,11 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: ['bride', 'groom'],
     },
+    registeredViaVendor: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
     lastChatSectionAccess: {
       type: Date,
     },

@@ -151,15 +151,27 @@ export const createOrUpdateProfile = async (req, res) => {
         }
       }
 
-      // Determine if this is vendor-created or user-created
-      const isVendorCreated = req.user.role === 'vendor' || req.user.role === 'super_admin';
+      // Check if user registered via a vendor
+      const user = await User.findById(userId).select('registeredViaVendor');
+      let isVendorCreated = false;
+      let createdBy = userId;
+      
+      if (user?.registeredViaVendor) {
+        // User registered with a vendor number, so profile is vendor-created
+        isVendorCreated = true;
+        createdBy = user.registeredViaVendor;
+      } else if (req.user.role === 'vendor' || req.user.role === 'super_admin') {
+        // Vendor or super_admin is creating the profile directly
+        isVendorCreated = true;
+        createdBy = req.user.id;
+      }
       
       // Create new profile with pending verification status
       profile = await Profile.create({
         userId,
         ...profileData,
-        createdBy: userId, // Set createdBy to the user creating it (vendor or regular user)
-        isVendorCreated: isVendorCreated,
+        createdBy, // Set createdBy to vendor if registered via vendor, otherwise to user
+        isVendorCreated,
         verificationStatus: 'pending', // New profiles start as pending
       });
     }

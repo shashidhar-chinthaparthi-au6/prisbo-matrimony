@@ -464,9 +464,9 @@ const ProfileDetail = () => {
           <div className="flex justify-between items-start mb-4">
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-2">
-                <h1 className="text-3xl font-bold">
-                  {profile.personalInfo?.firstName} {profile.personalInfo?.lastName}
-                </h1>
+              <h1 className="text-3xl font-bold">
+                {profile.personalInfo?.firstName} {profile.personalInfo?.lastName}
+              </h1>
                 {/* Verification Status Badge */}
                 <span
                   className={`px-3 py-1 rounded-full text-xs font-semibold ${
@@ -510,7 +510,7 @@ const ProfileDetail = () => {
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-sm text-gray-600">Profile Completion:</span>
                     <span className="text-sm font-semibold">{completionPercentage}%</span>
-                  </div>
+            </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div
                       className={`h-2 rounded-full transition-all duration-300 ${
@@ -617,38 +617,38 @@ const ProfileDetail = () => {
                 </>
               ) : user?.role !== 'vendor' ? (
                 <>
-                  <button
-                    onClick={handleFavorite}
-                    className={`px-4 py-2 rounded-md ${
-                      isFavorite
-                        ? 'bg-yellow-500 text-white'
-                        : 'bg-gray-200 text-gray-700'
-                    }`}
-                  >
-                    ⭐
-                  </button>
-                  {profile.interestStatus === 'accepted' ? (
-                    <button
-                      onClick={handleChat}
-                      className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
-                    >
-                      Chat
-                    </button>
-                  ) : profile.interestStatus === 'pending' ? (
-                    <button
-                      disabled
-                      className="px-4 py-2 bg-gray-400 text-white rounded-md cursor-not-allowed"
-                    >
-                      Interest Sent
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handleSendInterest}
-                      className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
-                    >
-                      Send Interest
-                    </button>
-                  )}
+              <button
+                onClick={handleFavorite}
+                className={`px-4 py-2 rounded-md ${
+                  isFavorite
+                    ? 'bg-yellow-500 text-white'
+                    : 'bg-gray-200 text-gray-700'
+                }`}
+              >
+                ⭐
+              </button>
+              {profile.interestStatus === 'accepted' ? (
+                <button
+                  onClick={handleChat}
+                  className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
+                >
+                  Chat
+                </button>
+              ) : profile.interestStatus === 'pending' ? (
+                <button
+                  disabled
+                  className="px-4 py-2 bg-gray-400 text-white rounded-md cursor-not-allowed"
+                >
+                  Interest Sent
+                </button>
+              ) : (
+                <button
+                  onClick={handleSendInterest}
+                  className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
+                >
+                  Send Interest
+                </button>
+              )}
                 </>
               ) : null}
             </div>
@@ -983,7 +983,7 @@ const ProfileDetail = () => {
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-xl font-semibold mb-4">Family Information</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
+            <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Father's Name:</label>
                   {isEditing && user?.role === 'super_admin' ? (
                     <input
@@ -1112,7 +1112,7 @@ const ProfileDetail = () => {
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-xl font-semibold mb-4">Education</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
+            <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Highest Education:</label>
                   {isEditing && user?.role === 'super_admin' ? (
                     <select
@@ -1210,7 +1210,7 @@ const ProfileDetail = () => {
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-xl font-semibold mb-4">Career</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
+            <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Occupation:</label>
                   {isEditing && user?.role === 'super_admin' ? (
                     <select
@@ -1249,7 +1249,7 @@ const ProfileDetail = () => {
                   ) : (
                     <p className="text-gray-900">{profile.career?.occupation || 'N/A'}</p>
                   )}
-                </div>
+              </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Company/Organization:</label>
                   {isEditing && user?.role === 'super_admin' ? (
@@ -1302,8 +1302,8 @@ const ProfileDetail = () => {
                     <p className="text-gray-900">{profile.career?.workingLocation || 'N/A'}</p>
                   )}
                 </div>
-              </div>
             </div>
+          </div>
 
             {/* Location Section */}
             <div className="bg-white rounded-lg shadow-md p-6">
@@ -1333,7 +1333,7 @@ const ProfileDetail = () => {
                   ) : (
                     <p className="text-gray-900">{profile.location?.country || 'N/A'}</p>
                   )}
-                </div>
+            </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">State:</label>
                   {isEditing && user?.role === 'super_admin' ? (
