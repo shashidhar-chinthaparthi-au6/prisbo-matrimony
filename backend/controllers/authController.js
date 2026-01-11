@@ -61,6 +61,8 @@ export const register = async (req, res) => {
         phone: user.phone,
         role: user.role,
         profileType: user.profileType,
+        termsAccepted: user.termsAccepted || false,
+        termsAcceptedAt: user.termsAcceptedAt || null,
       },
     });
   } catch (error) {
@@ -141,6 +143,8 @@ export const login = async (req, res) => {
         email: user.email,
         phone: user.phone,
         role: user.role,
+        termsAccepted: user.termsAccepted || false,
+        termsAcceptedAt: user.termsAcceptedAt || null,
       },
     });
   } catch (error) {
@@ -217,6 +221,8 @@ export const getMe = async (req, res) => {
         phone: user.phone,
         role: user.role,
         profileType: user.profileType,
+        termsAccepted: user.termsAccepted || false,
+        termsAcceptedAt: user.termsAcceptedAt || null,
         profile: profile || null,
       },
     });

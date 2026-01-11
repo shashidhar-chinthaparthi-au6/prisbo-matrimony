@@ -28,6 +28,10 @@ export const AuthProvider = ({ children }) => {
     try {
       const data = await getMe();
       setUser(data.user);
+      // Also update localStorage to persist termsAccepted status
+      if (data.user) {
+        localStorage.setItem('user', JSON.stringify(data.user));
+      }
     } catch (error) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
