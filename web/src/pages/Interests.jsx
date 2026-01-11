@@ -30,6 +30,7 @@ const Interests = () => {
     {
       enabled: !!user && !!localStorage.getItem('token'),
       retry: false,
+      refetchInterval: 15000, // Refetch every 15 seconds to catch subscription updates
       onError: () => {}, // Silently handle errors
     }
   );

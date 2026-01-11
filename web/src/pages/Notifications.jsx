@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useQuery } from 'react-query';
+import { useQuery, useQueryClient } from 'react-query';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getCurrentSubscription } from '../services/subscriptionService';
@@ -14,6 +14,7 @@ import { isProfileComplete } from '../utils/profileUtils';
 const Notifications = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [filter, setFilter] = useState('all'); // 'all' or 'unread'
   const [typeFilter, setTypeFilter] = useState('all'); // 'all', 'interest_sent', 'interest_accepted', 'new_message', etc.
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
@@ -26,6 +27,7 @@ const Notifications = () => {
     {
       enabled: !!user && !!localStorage.getItem('token'),
       retry: false,
+      refetchInterval: 10000, // Refetch every 10 seconds to catch subscription updates
       onError: () => {}, // Silently handle errors
     }
   );
@@ -141,11 +143,25 @@ const Notifications = () => {
     } else if (notification.relatedProfileId) {
       navigate(`/profiles/${notification.relatedProfileId}`);
     } else if (notification.type === 'subscription_approved' || notification.type === 'subscription_rejected' || notification.type === 'subscription_expiring' || notification.type === 'subscription_expired') {
+      // Invalidate subscription query when subscription-related notification is clicked
+      queryClient.invalidateQueries('current-subscription');
       navigate('/subscription');
     } else if (notification.type === 'profile_approved' || notification.type === 'profile_rejected') {
       navigate('/profile');
     }
   };
+
+  // Watch for subscription-related notifications and invalidate query
+  useEffect(() => {
+    if (data?.notifications) {
+      const hasSubscriptionNotification = data.notifications.some(
+        (n) => !n.isRead && (n.type === 'subscription_approved' || n.type === 'subscription_rejected')
+      );
+      if (hasSubscriptionNotification) {
+        queryClient.invalidateQueries('current-subscription');
+      }
+    }
+  }, [data?.notifications, queryClient]);
 
   const getNotificationIcon = (type) => {
     switch (type) {

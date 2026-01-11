@@ -416,6 +416,8 @@ const Admin = () => {
         toast.success('Subscription approved successfully');
         queryClient.invalidateQueries(['adminSubscriptions']);
         queryClient.invalidateQueries('pendingSubscriptions');
+        // Invalidate current-subscription for all users (the subscribed user will refetch)
+        queryClient.invalidateQueries('current-subscription');
       },
       onError: (error) => {
         toast.error(error.response?.data?.message || 'Failed to approve subscription');
@@ -430,6 +432,8 @@ const Admin = () => {
         toast.success('Subscription rejected');
         queryClient.invalidateQueries(['adminSubscriptions']);
         queryClient.invalidateQueries('pendingSubscriptions');
+        // Invalidate current-subscription for all users (the subscribed user will refetch)
+        queryClient.invalidateQueries('current-subscription');
       },
       onError: (error) => {
         toast.error(error.response?.data?.message || 'Failed to reject subscription');
@@ -2349,6 +2353,7 @@ const Admin = () => {
                           queryClient.invalidateQueries(['adminSubscriptions']);
                           queryClient.invalidateQueries('pendingSubscriptions');
                           queryClient.invalidateQueries('subscriptionStats');
+                          queryClient.invalidateQueries('current-subscription');
                           setSelectedSubscriptionIds([]);
                           setBulkModeSubscriptions(false);
                         } catch (error) {
@@ -2370,6 +2375,7 @@ const Admin = () => {
                           queryClient.invalidateQueries(['adminSubscriptions']);
                           queryClient.invalidateQueries('pendingSubscriptions');
                           queryClient.invalidateQueries('subscriptionStats');
+                          queryClient.invalidateQueries('current-subscription');
                           setSelectedSubscriptionIds([]);
                           setBulkModeSubscriptions(false);
                         } catch (error) {

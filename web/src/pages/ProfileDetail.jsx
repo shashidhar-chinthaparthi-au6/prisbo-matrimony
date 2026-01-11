@@ -117,6 +117,7 @@ const ProfileDetail = () => {
     {
       enabled: !!user && !!localStorage.getItem('token'),
       retry: false,
+      refetchInterval: 15000, // Refetch every 15 seconds to catch subscription updates
       onError: (error) => {
         // Silently handle errors for subscription check
         if (error.response?.status === 401 || error.response?.status === 404) {

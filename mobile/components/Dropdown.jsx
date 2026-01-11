@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Modal, StyleSheet, FlatList } from 'react-native';
 
-const Dropdown = ({ options, value, onSelect, placeholder = 'Select', style }) => {
+const Dropdown = ({ options, value, onSelect, placeholder = 'Select', style, disabled = false }) => {
   const [isVisible, setIsVisible] = useState(false);
 
   const selectedLabel = options.find(opt => opt.value === value)?.label || placeholder;
@@ -9,8 +9,9 @@ const Dropdown = ({ options, value, onSelect, placeholder = 'Select', style }) =
   return (
     <View>
       <TouchableOpacity
-        style={[styles.dropdown, style]}
-        onPress={() => setIsVisible(true)}
+        style={[styles.dropdown, style, disabled && styles.disabled]}
+        onPress={() => !disabled && setIsVisible(true)}
+        disabled={disabled}
       >
         <Text style={[styles.dropdownText, !value && styles.placeholder]}>
           {selectedLabel}
@@ -137,6 +138,10 @@ const styles = StyleSheet.create({
   selectedOptionText: {
     color: '#ef4444',
     fontWeight: '600',
+  },
+  disabled: {
+    opacity: 0.5,
+    backgroundColor: '#f3f4f6',
   },
 });
 

@@ -7,7 +7,11 @@ import {
   approveProfile,
   rejectProfile,
   updateProfileStatus,
+  createProfileForPerson,
 } from '../services/vendorService';
+import { indianStates, stateCities } from '../utils/indianLocations';
+import { religions, casteCategories } from '../utils/religionData';
+import Dropdown from '../components/Dropdown';
 
 const VendorDashboardScreen = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState('profiles');
@@ -17,6 +21,21 @@ const VendorDashboardScreen = ({ navigation }) => {
   const [page, setPage] = useState(1);
   const [rejectingProfile, setRejectingProfile] = useState(null);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [creatingProfile, setCreatingProfile] = useState(false);
+  const [formData, setFormData] = useState({
+    type: 'bride',
+    personalInfo: {},
+    familyInfo: {},
+    location: {},
+    education: {},
+    career: {},
+    religion: {},
+    preferences: {},
+    email: '',
+    phone: '',
+    userId: '',
+  });
 
   useEffect(() => {
     if (activeTab === 'profiles') {
@@ -72,6 +91,139 @@ const VendorDashboardScreen = ({ navigation }) => {
         },
       ]
     );
+  };
+
+  const handleApprove = async (id) => {
+    Alert.alert(
+      'Approve Profile',
+      'Are you sure you want to approve this profile?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Approve',
+          onPress: async () => {
+            try {
+              await approveProfile(id);
+              Alert.alert('Success', 'Profile approved successfully');
+              loadProfiles();
+              loadStats();
+            } catch (error) {
+              Alert.alert('Error', error.response?.data?.message || 'Failed to approve profile');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleReject = async () => {
+    if (!rejectionReason.trim()) {
+      Alert.alert('Error', 'Please provide a rejection reason');
+      return;
+    }
+    try {
+      await rejectProfile(rejectingProfile._id, rejectionReason);
+      Alert.alert('Success', 'Profile rejected successfully');
+      setRejectingProfile(null);
+      setRejectionReason('');
+      loadProfiles();
+      loadStats();
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.message || 'Failed to reject profile');
+    }
+  };
+
+  const handleStatusToggle = async (profile) => {
+    try {
+      await updateProfileStatus(profile._id, !profile.isActive);
+      Alert.alert('Success', `Profile ${!profile.isActive ? 'activated' : 'deactivated'} successfully`);
+      loadProfiles();
+      loadStats();
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.message || 'Failed to update profile status');
+    }
+  };
+
+  const handleFieldChange = (section, field, value) => {
+    if (section === 'root') {
+      setFormData((prev) => ({
+        ...prev,
+        [field]: value,
+      }));
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        [section]: {
+          ...prev[section],
+          [field]: value,
+        },
+      }));
+    }
+  };
+
+  const handleSubmit = async () => {
+    // Validate required fields
+    if (!formData.personalInfo?.firstName || !formData.personalInfo?.lastName) {
+      Alert.alert('Error', 'First name and last name are required');
+      return;
+    }
+    if (!formData.personalInfo?.dateOfBirth) {
+      Alert.alert('Error', 'Date of birth is required');
+      return;
+    }
+    if (!formData.location?.city || !formData.location?.state) {
+      Alert.alert('Error', 'City and state are required');
+      return;
+    }
+    if (!formData.type) {
+      Alert.alert('Error', 'Profile type (bride/groom) is required');
+      return;
+    }
+
+    setCreatingProfile(true);
+    try {
+      const profilePayload = {
+        type: formData.type,
+        personalInfo: formData.personalInfo,
+        familyInfo: formData.familyInfo || {},
+        location: formData.location,
+        education: formData.education || {},
+        career: formData.career || {},
+        religion: formData.religion || {},
+        preferences: formData.preferences || {},
+      };
+
+      // If userId is provided, use it; otherwise include email/phone for account creation
+      if (formData.userId) {
+        profilePayload.userId = formData.userId;
+      } else if (formData.email || formData.phone) {
+        profilePayload.email = formData.email;
+        profilePayload.phone = formData.phone;
+      }
+
+      await createProfileForPerson(profilePayload);
+      Alert.alert('Success', 'Profile created successfully!');
+      setShowCreateForm(false);
+      setFormData({
+        type: 'bride',
+        personalInfo: {},
+        familyInfo: {},
+        location: {},
+        education: {},
+        career: {},
+        religion: {},
+        preferences: {},
+        email: '',
+        phone: '',
+        userId: '',
+      });
+      loadProfiles();
+      loadStats();
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.message || 'Failed to create profile');
+    } finally {
+      setCreatingProfile(false);
+    }
   };
 
   const renderProfileItem = ({ item }) => (
@@ -219,9 +371,7 @@ const VendorDashboardScreen = ({ navigation }) => {
             <Text style={styles.sectionTitle}>My Profiles</Text>
             <TouchableOpacity
               style={styles.createButton}
-              onPress={() => {
-                Alert.alert('Create Profile', 'Profile creation form would be implemented here');
-              }}
+              onPress={() => setShowCreateForm(true)}
             >
               <Text style={styles.createButtonText}>Create New</Text>
             </TouchableOpacity>
@@ -286,6 +436,302 @@ const VendorDashboardScreen = ({ navigation }) => {
                 <Text style={styles.confirmButtonText}>Reject</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Create Profile Modal */}
+      <Modal
+        visible={showCreateForm}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowCreateForm(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.createModalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Create New Profile</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowCreateForm(false);
+                  setFormData({
+                    type: 'bride',
+                    personalInfo: {},
+                    familyInfo: {},
+                    location: {},
+                    education: {},
+                    career: {},
+                    religion: {},
+                    preferences: {},
+                    email: '',
+                    phone: '',
+                    userId: '',
+                  });
+                }}
+              >
+                <Text style={styles.closeButton}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.formScrollView} showsVerticalScrollIndicator={true}>
+              {/* Profile Type */}
+              <View style={styles.formSection}>
+                <Text style={styles.sectionLabel}>Profile Type <Text style={styles.required}>*</Text></Text>
+                <View style={styles.radioGroup}>
+                  <TouchableOpacity
+                    style={[styles.radioOption, formData.type === 'bride' && styles.radioSelected]}
+                    onPress={() => handleFieldChange('root', 'type', 'bride')}
+                  >
+                    <Text style={[styles.radioText, formData.type === 'bride' && styles.radioTextSelected]}>Bride</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.radioOption, formData.type === 'groom' && styles.radioSelected]}
+                    onPress={() => handleFieldChange('root', 'type', 'groom')}
+                  >
+                    <Text style={[styles.radioText, formData.type === 'groom' && styles.radioTextSelected]}>Groom</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* User Account Info */}
+              <View style={styles.formSection}>
+                <Text style={styles.sectionLabel}>User Account (Optional)</Text>
+                <Text style={styles.sectionHint}>If person has account, enter User ID. Otherwise provide email/phone.</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.userId}
+                  onChangeText={(value) => handleFieldChange('root', 'userId', value)}
+                  placeholder="User ID (if exists)"
+                />
+                <TextInput
+                  style={styles.input}
+                  value={formData.email}
+                  onChangeText={(value) => handleFieldChange('root', 'email', value)}
+                  placeholder="Email"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+                <TextInput
+                  style={styles.input}
+                  value={formData.phone}
+                  onChangeText={(value) => handleFieldChange('root', 'phone', value)}
+                  placeholder="Phone"
+                  keyboardType="phone-pad"
+                />
+              </View>
+
+              {/* Personal Information */}
+              <View style={styles.formSection}>
+                <Text style={styles.sectionLabel}>Personal Information</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.personalInfo?.firstName || ''}
+                  onChangeText={(value) => handleFieldChange('personalInfo', 'firstName', value)}
+                  placeholder="First Name *"
+                />
+                <TextInput
+                  style={styles.input}
+                  value={formData.personalInfo?.lastName || ''}
+                  onChangeText={(value) => handleFieldChange('personalInfo', 'lastName', value)}
+                  placeholder="Last Name *"
+                />
+                <Text style={styles.inputLabel}>Date of Birth <Text style={styles.required}>*</Text></Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.personalInfo?.dateOfBirth || ''}
+                  onChangeText={(value) => handleFieldChange('personalInfo', 'dateOfBirth', value)}
+                  placeholder="YYYY-MM-DD"
+                />
+                <TextInput
+                  style={styles.input}
+                  value={formData.personalInfo?.height || ''}
+                  onChangeText={(value) => handleFieldChange('personalInfo', 'height', value)}
+                  placeholder="Height (e.g., 5'6&quot; or 168 cm)"
+                />
+                <TextInput
+                  style={styles.input}
+                  value={formData.personalInfo?.weight || ''}
+                  onChangeText={(value) => handleFieldChange('personalInfo', 'weight', value)}
+                  placeholder="Weight (e.g., 65 kg)"
+                />
+                <Dropdown
+                  options={[
+                    { label: 'Select', value: '' },
+                    { label: 'Never Married', value: 'Never Married' },
+                    { label: 'Divorced', value: 'Divorced' },
+                    { label: 'Widowed', value: 'Widowed' },
+                  ]}
+                  value={formData.personalInfo?.maritalStatus || ''}
+                  onSelect={(value) => handleFieldChange('personalInfo', 'maritalStatus', value)}
+                  placeholder="Marital Status"
+                  style={styles.input}
+                />
+                <Dropdown
+                  options={[
+                    { label: 'Select', value: '' },
+                    { label: 'Fair', value: 'Fair' },
+                    { label: 'Wheatish', value: 'Wheatish' },
+                    { label: 'Wheatish Brown', value: 'Wheatish Brown' },
+                    { label: 'Dark', value: 'Dark' },
+                  ]}
+                  value={formData.personalInfo?.complexion || ''}
+                  onSelect={(value) => handleFieldChange('personalInfo', 'complexion', value)}
+                  placeholder="Complexion"
+                  style={styles.input}
+                />
+                <TextInput
+                  style={styles.input}
+                  value={formData.personalInfo?.motherTongue || ''}
+                  onChangeText={(value) => handleFieldChange('personalInfo', 'motherTongue', value)}
+                  placeholder="Mother Tongue"
+                />
+              </View>
+
+              {/* Location */}
+              <View style={styles.formSection}>
+                <Text style={styles.sectionLabel}>Location</Text>
+                <Dropdown
+                  options={[
+                    { label: 'Select State', value: '' },
+                    ...indianStates.map((state) => ({ label: state, value: state })),
+                  ]}
+                  value={formData.location?.state || ''}
+                  onSelect={(value) => {
+                    handleFieldChange('location', 'state', value);
+                    handleFieldChange('location', 'city', '');
+                  }}
+                  placeholder="State *"
+                  style={styles.input}
+                />
+                <Dropdown
+                  options={[
+                    { label: 'Select City', value: '' },
+                    ...(formData.location?.state && stateCities[formData.location.state]
+                      ? stateCities[formData.location.state].map((city) => ({ label: city, value: city }))
+                      : []),
+                  ]}
+                  value={formData.location?.city || ''}
+                  onSelect={(value) => handleFieldChange('location', 'city', value)}
+                  placeholder="City *"
+                  style={styles.input}
+                  disabled={!formData.location?.state}
+                />
+                <TextInput
+                  style={styles.input}
+                  value={formData.location?.country || 'India'}
+                  onChangeText={(value) => handleFieldChange('location', 'country', value)}
+                  placeholder="Country"
+                />
+              </View>
+
+              {/* Religion */}
+              <View style={styles.formSection}>
+                <Text style={styles.sectionLabel}>Religion</Text>
+                <Dropdown
+                  options={[
+                    { label: 'Select Religion', value: '' },
+                    ...religions.map((religion) => ({ label: religion, value: religion })),
+                  ]}
+                  value={formData.religion?.religion || ''}
+                  onSelect={(value) => {
+                    handleFieldChange('religion', 'religion', value);
+                    handleFieldChange('religion', 'caste', '');
+                  }}
+                  placeholder="Religion"
+                  style={styles.input}
+                />
+                <Dropdown
+                  options={[
+                    { label: 'Select Caste', value: '' },
+                    ...(formData.religion?.religion && casteCategories[formData.religion.religion]
+                      ? casteCategories[formData.religion.religion].map((caste) => ({ label: caste, value: caste }))
+                      : []),
+                  ]}
+                  value={formData.religion?.caste || ''}
+                  onSelect={(value) => handleFieldChange('religion', 'caste', value)}
+                  placeholder="Caste"
+                  style={styles.input}
+                  disabled={!formData.religion?.religion}
+                />
+              </View>
+
+              {/* Education */}
+              <View style={styles.formSection}>
+                <Text style={styles.sectionLabel}>Education</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.education?.level || ''}
+                  onChangeText={(value) => handleFieldChange('education', 'level', value)}
+                  placeholder="Education Level (e.g., B.Tech, MBA)"
+                />
+                <TextInput
+                  style={styles.input}
+                  value={formData.education?.institution || ''}
+                  onChangeText={(value) => handleFieldChange('education', 'institution', value)}
+                  placeholder="Institution"
+                />
+              </View>
+
+              {/* Career */}
+              <View style={styles.formSection}>
+                <Text style={styles.sectionLabel}>Career</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.career?.occupation || ''}
+                  onChangeText={(value) => handleFieldChange('career', 'occupation', value)}
+                  placeholder="Occupation"
+                />
+                <TextInput
+                  style={styles.input}
+                  value={formData.career?.income || ''}
+                  onChangeText={(value) => handleFieldChange('career', 'income', value)}
+                  placeholder="Annual Income (e.g., 5-10 Lakhs)"
+                />
+              </View>
+
+              {/* Family Info */}
+              <View style={styles.formSection}>
+                <Text style={styles.sectionLabel}>Family Information</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.familyInfo?.fatherName || ''}
+                  onChangeText={(value) => handleFieldChange('familyInfo', 'fatherName', value)}
+                  placeholder="Father's Name"
+                />
+                <TextInput
+                  style={styles.input}
+                  value={formData.familyInfo?.fatherOccupation || ''}
+                  onChangeText={(value) => handleFieldChange('familyInfo', 'fatherOccupation', value)}
+                  placeholder="Father's Occupation"
+                />
+                <TextInput
+                  style={styles.input}
+                  value={formData.familyInfo?.motherName || ''}
+                  onChangeText={(value) => handleFieldChange('familyInfo', 'motherName', value)}
+                  placeholder="Mother's Name"
+                />
+                <TextInput
+                  style={styles.input}
+                  value={formData.familyInfo?.motherOccupation || ''}
+                  onChangeText={(value) => handleFieldChange('familyInfo', 'motherOccupation', value)}
+                  placeholder="Mother's Occupation"
+                />
+              </View>
+
+              {/* Submit Button */}
+              <View style={styles.formActions}>
+                <TouchableOpacity
+                  style={[styles.submitButton, creatingProfile && styles.submitButtonDisabled]}
+                  onPress={handleSubmit}
+                  disabled={creatingProfile}
+                >
+                  {creatingProfile ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.submitButtonText}>Create Profile</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -600,6 +1046,106 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     textAlign: 'center',
+  },
+  createModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    width: '95%',
+    maxHeight: '90%',
+    padding: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    paddingBottom: 10,
+  },
+  closeButton: {
+    fontSize: 24,
+    color: '#666',
+    fontWeight: 'bold',
+  },
+  formScrollView: {
+    maxHeight: '85%',
+  },
+  formSection: {
+    marginBottom: 20,
+  },
+  sectionLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 10,
+  },
+  sectionHint: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 10,
+    fontStyle: 'italic',
+  },
+  required: {
+    color: '#ef4444',
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 10,
+    fontSize: 14,
+    backgroundColor: '#fff',
+  },
+  inputLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 5,
+  },
+  radioGroup: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 5,
+  },
+  radioOption: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  radioSelected: {
+    borderColor: '#ef4444',
+    backgroundColor: '#fee2e2',
+  },
+  radioText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  radioTextSelected: {
+    color: '#ef4444',
+    fontWeight: 'bold',
+  },
+  formActions: {
+    marginTop: 20,
+    marginBottom: 20,
+  },
+  submitButton: {
+    backgroundColor: '#ef4444',
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  submitButtonDisabled: {
+    opacity: 0.6,
+  },
+  submitButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
 

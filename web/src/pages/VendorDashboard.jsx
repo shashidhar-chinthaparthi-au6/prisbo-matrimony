@@ -172,6 +172,8 @@ const VendorDashboard = () => {
         toast.success('Subscription approved successfully');
         queryClient.invalidateQueries(['vendorSubscriptions']);
         queryClient.invalidateQueries(['vendorStats']);
+        // Invalidate current-subscription for all users (the subscribed user will refetch)
+        queryClient.invalidateQueries('current-subscription');
       },
       onError: (error) => {
         toast.error(error.response?.data?.message || 'Failed to approve subscription');
@@ -188,6 +190,8 @@ const VendorDashboard = () => {
         setSubscriptionRejectionReason('');
         queryClient.invalidateQueries(['vendorSubscriptions']);
         queryClient.invalidateQueries(['vendorStats']);
+        // Invalidate current-subscription for all users (the subscribed user will refetch)
+        queryClient.invalidateQueries('current-subscription');
       },
       onError: (error) => {
         toast.error(error.response?.data?.message || 'Failed to reject subscription');

@@ -25,6 +25,7 @@ const Subscription = () => {
     {
       enabled: !!user && !!localStorage.getItem('token'),
       retry: false,
+      refetchInterval: 10000, // Refetch every 10 seconds to catch subscription updates
       onError: () => {}, // Silently handle errors
     }
   );
