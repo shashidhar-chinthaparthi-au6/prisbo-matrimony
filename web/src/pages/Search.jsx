@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from 'react-query';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { searchProfiles } from '../services/searchService';
 import { getMyProfile } from '../services/profileService';
 import { getCurrentSubscription } from '../services/subscriptionService';
@@ -15,6 +16,7 @@ import { isProfileComplete } from '../utils/profileUtils';
 
 const Search = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   
   // Load saved search preferences from localStorage
   const loadSavedPreferences = () => {
@@ -48,7 +50,15 @@ const Search = () => {
   const [savedSearches, setSavedSearches] = useState([]);
 
   const { data: profileData } = useQuery('myProfile', getMyProfile);
-  const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
+  const { data: subscriptionData } = useQuery(
+    'current-subscription', 
+    getCurrentSubscription,
+    {
+      enabled: !!user && !!localStorage.getItem('token'),
+      retry: false,
+      onError: () => {}, // Silently handle errors
+    }
+  );
   const { data, isLoading, refetch, error } = useQuery(
     ['search', filters],
     () => searchProfiles(filters),

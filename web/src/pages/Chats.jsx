@@ -33,7 +33,15 @@ const Chats = () => {
   const fileInputRef = useRef(null);
   const mediaRecorderRef = useRef(null);
 
-  const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
+  const { data: subscriptionData } = useQuery(
+    'current-subscription', 
+    getCurrentSubscription,
+    {
+      enabled: !!user && !!localStorage.getItem('token'),
+      retry: false,
+      onError: () => {}, // Silently handle errors
+    }
+  );
   const { data: profileData } = useQuery('myProfile', getMyProfile);
   const { data: chatsData, refetch: refetchChats } = useQuery('chats', getChats, {
     refetchInterval: 5000, // Refresh every 5 seconds for notifications

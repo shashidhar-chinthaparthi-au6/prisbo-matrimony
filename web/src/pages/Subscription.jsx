@@ -21,7 +21,12 @@ const Subscription = () => {
   const { data: plansData, isLoading: plansLoading } = useQuery('subscription-plans', getPlans);
   const { data: currentSubscriptionData, isLoading: subscriptionLoading } = useQuery(
     'current-subscription',
-    getCurrentSubscription
+    getCurrentSubscription,
+    {
+      enabled: !!user && !!localStorage.getItem('token'),
+      retry: false,
+      onError: () => {}, // Silently handle errors
+    }
   );
   const { data: historyData, isLoading: historyLoading } = useQuery(
     'subscription-history',

@@ -91,7 +91,20 @@ const ProfileDetail = () => {
     }
   );
   const { data: myProfileData } = useQuery('myProfile', getMyProfile);
-  const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
+  const { data: subscriptionData } = useQuery(
+    'current-subscription', 
+    getCurrentSubscription,
+    {
+      enabled: !!user && !!localStorage.getItem('token'),
+      retry: false,
+      onError: (error) => {
+        // Silently handle errors for subscription check
+        if (error.response?.status === 401 || error.response?.status === 404) {
+          // User not authenticated or no subscription - that's okay
+        }
+      },
+    }
+  );
 
   const hasActiveSubscription = subscriptionData?.hasActiveSubscription;
   const isMyProfile = myProfileData?.profile?.userId?._id === data?.profile?.userId?._id;

@@ -24,9 +24,17 @@ const Layout = ({ children }) => {
     'notifications-count',
     () => getNotifications({ limit: 1, unreadOnly: true }),
     {
-      enabled: !!user,
+      enabled: !!user && !!localStorage.getItem('token'), // Only run if user exists and token is present
       refetchInterval: 15000, // Refresh every 15 seconds (reduced frequency to avoid rate limits)
       retry: false, // Don't retry on rate limit errors
+      onError: (error) => {
+        // Silently handle 401 errors (user not authenticated)
+        if (error.response?.status === 401) {
+          // Token might be invalid, clear it
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+        }
+      },
     }
   );
 

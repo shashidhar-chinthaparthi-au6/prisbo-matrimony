@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from 'react-query';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { getCurrentSubscription } from '../services/subscriptionService';
 import { getNotifications, markAsRead, markAllAsRead, deleteNotification, deleteAllNotifications, getNotificationPreferences, updateNotificationPreferences } from '../services/notificationService';
 import { getMyProfile } from '../services/profileService';
@@ -12,13 +13,22 @@ import { isProfileComplete } from '../utils/profileUtils';
 
 const Notifications = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [filter, setFilter] = useState('all'); // 'all' or 'unread'
   const [typeFilter, setTypeFilter] = useState('all'); // 'all', 'interest_sent', 'interest_accepted', 'new_message', etc.
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [showProfileIncompleteModal, setShowProfileIncompleteModal] = useState(false);
   const [showPreferences, setShowPreferences] = useState(false);
 
-  const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
+  const { data: subscriptionData } = useQuery(
+    'current-subscription', 
+    getCurrentSubscription,
+    {
+      enabled: !!user && !!localStorage.getItem('token'),
+      retry: false,
+      onError: () => {}, // Silently handle errors
+    }
+  );
   const { data: profileData } = useQuery('myProfile', getMyProfile);
   const { data, refetch } = useQuery(
     ['notifications', filter, typeFilter],

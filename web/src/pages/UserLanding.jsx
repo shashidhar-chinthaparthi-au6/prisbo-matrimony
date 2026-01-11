@@ -8,7 +8,15 @@ import { isProfileComplete } from '../utils/profileUtils';
 const UserLanding = () => {
   const { user } = useAuth();
   const { data: profileData } = useQuery('myProfile', getMyProfile);
-  const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
+  const { data: subscriptionData } = useQuery(
+    'current-subscription', 
+    getCurrentSubscription,
+    {
+      enabled: !!user && !!localStorage.getItem('token'),
+      retry: false,
+      onError: () => {}, // Silently handle errors
+    }
+  );
 
   const profile = profileData?.profile;
   const hasActiveSubscription = subscriptionData?.hasActiveSubscription;

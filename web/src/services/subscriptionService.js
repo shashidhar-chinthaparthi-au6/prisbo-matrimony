@@ -6,8 +6,20 @@ export const getPlans = async () => {
 };
 
 export const getCurrentSubscription = async () => {
-  const response = await api.get('/subscriptions/current');
-  return response.data;
+  try {
+    const response = await api.get('/subscriptions/current');
+    return response.data;
+  } catch (error) {
+    // If endpoint doesn't exist or user has no subscription, return default
+    if (error.response?.status === 404 || error.response?.status === 401) {
+      return {
+        success: true,
+        hasActiveSubscription: false,
+        subscription: null,
+      };
+    }
+    throw error;
+  }
 };
 
 export const getSubscriptionHistory = async () => {

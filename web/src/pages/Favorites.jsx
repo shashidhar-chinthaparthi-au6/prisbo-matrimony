@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from 'react-query';
+import { useAuth } from '../context/AuthContext';
 import { getFavorites, removeFavorite, updateFavorite, exportFavorites } from '../services/favoriteService';
 import { getMyProfile } from '../services/profileService';
 import { getCurrentSubscription } from '../services/subscriptionService';
@@ -12,13 +13,22 @@ import { isProfileComplete } from '../utils/profileUtils';
 
 const Favorites = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [showProfileIncompleteModal, setShowProfileIncompleteModal] = useState(false);
   const [editingFavorite, setEditingFavorite] = useState(null);
   const [editNotes, setEditNotes] = useState('');
   const [editCategory, setEditCategory] = useState('general');
   
-  const { data: subscriptionData } = useQuery('current-subscription', getCurrentSubscription);
+  const { data: subscriptionData } = useQuery(
+    'current-subscription', 
+    getCurrentSubscription,
+    {
+      enabled: !!user && !!localStorage.getItem('token'),
+      retry: false,
+      onError: () => {}, // Silently handle errors
+    }
+  );
   const { data: profileData } = useQuery('myProfile', getMyProfile);
   const { data, refetch } = useQuery('favorites', getFavorites, {
     retry: false,
