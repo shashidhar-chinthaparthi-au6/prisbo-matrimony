@@ -4,13 +4,20 @@ import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { getProfileById, getMyProfile, deleteProfile, updateProfile } from '../services/profileService';
 import { 
   getProfileById as getAdminProfileById,
-  approveProfile,
-  rejectProfile,
-  updateProfileStatus,
+  approveProfile as approveProfileAdmin,
+  rejectProfile as rejectProfileAdmin,
+  updateProfileStatus as updateProfileStatusAdmin,
   updateProfileField,
   blockUser,
   bulkDeleteProfiles
 } from '../services/adminService';
+import {
+  approveProfile as approveProfileVendor,
+  rejectProfile as rejectProfileVendor,
+  updateProfileStatus as updateProfileStatusVendor,
+  deleteMyProfile,
+  getMyProfileById,
+} from '../services/vendorService';
 import { getCurrentSubscription } from '../services/subscriptionService';
 import { sendInterest } from '../services/interestService';
 import { addFavorite, removeFavorite } from '../services/favoriteService';
@@ -51,12 +58,25 @@ const ProfileDetail = () => {
     console.log('ProfileDetail - ID changed to:', id, 'URL:', window.location.pathname);
   }, [id]);
   
-  // Use admin endpoint if user is super_admin, otherwise use regular endpoint
+  // Use appropriate endpoint based on user role
   const isAdmin = user?.role === 'super_admin';
+  const isVendor = user?.role === 'vendor';
   const fetchProfile = isAdmin 
     ? () => {
         console.log('Using admin endpoint for profile:', id, 'User role:', user?.role);
         return getAdminProfileById(id);
+      }
+    : isVendor
+    ? async () => {
+        console.log('Using vendor endpoint for profile:', id, 'User role:', user?.role);
+        // Try vendor endpoint first, fallback to regular if not owned
+        try {
+          return await getMyProfileById(id);
+        } catch (error) {
+          // If vendor doesn't own it, use regular endpoint
+          console.log('Vendor endpoint failed, using regular endpoint:', error);
+          return getProfileById(id);
+        }
       }
     : () => {
         console.log('Using regular endpoint for profile:', id, 'User role:', user?.role);
@@ -214,10 +234,14 @@ const ProfileDetail = () => {
     }
   };
 
-  // Admin actions
+  // Admin/Vendor actions
   const handleApproveProfile = async () => {
     try {
-      await approveProfile(id);
+      if (user?.role === 'vendor' && isVendorOwnedProfile) {
+        await approveProfileVendor(id);
+      } else {
+        await approveProfileAdmin(id);
+      }
       toast.success('Profile approved successfully');
       queryClient.invalidateQueries(['profile', id, user?.role]);
       refetch();
@@ -232,7 +256,11 @@ const ProfileDetail = () => {
       return;
     }
     try {
-      await rejectProfile(id, rejectionReason);
+      if (user?.role === 'vendor' && isVendorOwnedProfile) {
+        await rejectProfileVendor(id, rejectionReason);
+      } else {
+        await rejectProfileAdmin(id, rejectionReason);
+      }
       toast.success('Profile rejected successfully');
       setShowRejectModal(false);
       setRejectionReason('');
@@ -245,9 +273,13 @@ const ProfileDetail = () => {
 
   const handleToggleProfileStatus = async () => {
     try {
-      await updateProfileStatus(id, { 
-        isActive: !profile.isActive 
-      });
+      if (user?.role === 'vendor' && isVendorOwnedProfile) {
+        await updateProfileStatusVendor(id, !profile.isActive);
+      } else {
+        await updateProfileStatusAdmin(id, { 
+          isActive: !profile.isActive 
+        });
+      }
       toast.success(`Profile ${profile.isActive ? 'deactivated' : 'activated'} successfully`);
       queryClient.invalidateQueries(['profile', id, user?.role]);
       refetch();
@@ -281,9 +313,15 @@ const ProfileDetail = () => {
       return;
     }
     try {
-      await bulkDeleteProfiles([id]);
-      toast.success('Profile deleted successfully');
-      navigate('/admin');
+      if (user?.role === 'vendor' && isVendorOwnedProfile) {
+        await deleteMyProfile(id);
+        toast.success('Profile deleted successfully');
+        navigate('/vendor');
+      } else {
+        await bulkDeleteProfiles([id]);
+        toast.success('Profile deleted successfully');
+        navigate('/admin');
+      }
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to delete profile');
     }
@@ -439,6 +477,9 @@ const ProfileDetail = () => {
   }
 
   const profile = data.profile;
+  // Check if vendor owns this profile
+  const isVendorOwnedProfile = user?.role === 'vendor' && profile?.createdBy && 
+    (profile.createdBy._id?.toString() === user.id?.toString() || profile.createdBy.toString() === user.id?.toString());
   const completionPercentage = isMyProfile ? getProfileCompletionPercentage(profile) : null;
   const verificationStatus = profile.verificationStatus || 'pending';
 
@@ -618,6 +659,71 @@ const ProfileDetail = () => {
                     className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
                   >
                     Block User
+                  </button>
+                  
+                  {/* Delete Profile */}
+                  <button
+                    onClick={handleAdminDeleteProfile}
+                    className="px-4 py-2 bg-red-800 text-white rounded-md hover:bg-red-900"
+                  >
+                    Delete Profile
+                  </button>
+                </>
+              ) : user?.role === 'vendor' && isVendorOwnedProfile ? (
+                <>
+                  {/* Edit Profile */}
+                  {!isEditing ? (
+                    <button
+                      onClick={() => setIsEditing(true)}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                    >
+                      ✏️ Edit Profile
+                    </button>
+                  ) : (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleCancelEdit}
+                        className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleSaveAll}
+                        className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                      >
+                        Save All
+                      </button>
+                    </div>
+                  )}
+                  
+                  {/* Verification Actions */}
+                  {profile.verificationStatus === 'pending' && (
+                    <>
+                      <button
+                        onClick={handleApproveProfile}
+                        className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                      >
+                        ✓ Approve
+                      </button>
+                      <button
+                        onClick={() => setShowRejectModal(true)}
+                        className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700"
+                      >
+                        ✗ Reject
+                      </button>
+                    </>
+                  )}
+                  
+                  {/* Status Actions */}
+                  <button
+                    onClick={handleToggleProfileStatus}
+                    className={`px-4 py-2 rounded-md ${
+                      profile.isActive
+                        ? 'bg-yellow-600 text-white hover:bg-yellow-700'
+                        : 'bg-green-600 text-white hover:bg-green-700'
+                    }`}
+                  >
+                    {profile.isActive ? 'Deactivate' : 'Activate'}
                   </button>
                   
                   {/* Delete Profile */}

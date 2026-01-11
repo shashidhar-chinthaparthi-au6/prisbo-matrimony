@@ -39,6 +39,7 @@ const Search = () => {
       occupation: '',
       religion: '',
       caste: '',
+      vendorProfilesOnly: false,
       page: 1,
     };
   };
@@ -372,6 +373,41 @@ const Search = () => {
                 <option value="name">Name (A-Z)</option>
               </select>
             </div>
+            {/* Vendor Profiles Only Filter */}
+            {profileData?.profile?.isVendorCreated || user?.registeredViaVendor ? (
+              <div className="md:col-span-2 lg:col-span-3">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={filters.vendorProfilesOnly || false}
+                    onChange={(e) => handleFilterChange('vendorProfilesOnly', e.target.checked)}
+                    className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
+                  />
+                  <span className="text-sm font-medium text-gray-700">
+                    Show vendor profiles only
+                    {profileData?.profile?.isVendorCreated && (
+                      <span className="text-xs text-gray-500 ml-2">
+                        (Profiles from your vendor)
+                      </span>
+                    )}
+                  </span>
+                </label>
+              </div>
+            ) : (
+              <div className="md:col-span-2 lg:col-span-3">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={filters.vendorProfilesOnly || false}
+                    onChange={(e) => handleFilterChange('vendorProfilesOnly', e.target.checked)}
+                    className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
+                  />
+                  <span className="text-sm font-medium text-gray-700">
+                    Show vendor profiles only
+                  </span>
+                </label>
+              </div>
+            )}
           </div>
           <div className="mt-4">
             <button

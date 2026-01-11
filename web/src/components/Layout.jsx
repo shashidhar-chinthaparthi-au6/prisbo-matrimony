@@ -45,6 +45,11 @@ const Layout = ({ children }) => {
         { path: '/', label: 'Home', icon: '🏠' },
         { path: '/admin', label: 'Admin', icon: '⚙️' },
       ]
+    : user?.role === 'vendor'
+    ? [
+        { path: '/', label: 'Home', icon: '🏠' },
+        { path: '/vendor', label: 'Dashboard', icon: '⚙️' },
+      ]
     : [
     { path: '/', label: 'Home', icon: '🏠' },
     { path: '/search', label: 'Search', icon: '🔍' },

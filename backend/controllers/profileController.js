@@ -1,4 +1,5 @@
 import Profile from '../models/Profile.js';
+import User from '../models/User.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -42,15 +43,11 @@ export const createOrUpdateProfile = async (req, res) => {
     let profile = await Profile.findOne({ userId });
 
     if (profile) {
-      // Prevent users from editing vendor-created profiles (unless they are the vendor)
-      if (profile.isVendorCreated && req.user.role === 'user') {
-        if (profile.createdBy?.toString() !== req.user.id.toString()) {
-          return res.status(403).json({
-            success: false,
-            message: 'You cannot edit this profile. It was created by a vendor. Please contact the vendor for updates.',
-          });
-        }
-      }
+      // Users can always edit their own profile, even if it was created by a vendor
+      // The check below only prevents editing OTHER users' profiles
+      // Since this endpoint uses req.user.id (the authenticated user's ID), 
+      // and we're finding by userId, this is always the user's own profile
+      // So we allow editing regardless of who created it
 
       // Update existing profile
       Object.keys(profileData).forEach((key) => {

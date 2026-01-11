@@ -30,3 +30,33 @@ export const getMyStats = async () => {
   return response.data;
 };
 
+export const approveProfile = async (id) => {
+  const response = await api.put(`/vendor/profiles/${id}/approve`);
+  return response.data;
+};
+
+export const rejectProfile = async (id, rejectionReason) => {
+  const response = await api.put(`/vendor/profiles/${id}/reject`, { rejectionReason });
+  return response.data;
+};
+
+export const updateProfileStatus = async (id, isActive) => {
+  const response = await api.put(`/vendor/profiles/${id}/status`, { isActive });
+  return response.data;
+};
+
+export const getMySubscriptions = async (params) => {
+  const response = await api.get('/vendor/subscriptions', { params });
+  return response.data;
+};
+
+export const approveSubscription = async (id, data) => {
+  const response = await api.put(`/vendor/subscriptions/${id}/approve`, data);
+  return response.data;
+};
+
+export const rejectSubscription = async (id, rejectionReason) => {
+  const response = await api.put(`/vendor/subscriptions/${id}/reject`, { rejectionReason });
+  return response.data;
+};
+

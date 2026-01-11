@@ -12,6 +12,7 @@ import ProfileVerificationPendingModal from '../components/ProfileVerificationPe
 import { isProfileComplete } from '../utils/profileUtils';
 
 const SearchScreen = ({ navigation }) => {
+  const { user } = useAuth();
   const [filters, setFilters] = useState({
     minAge: '',
     maxAge: '',
@@ -22,6 +23,7 @@ const SearchScreen = ({ navigation }) => {
     verificationStatus: '',
     minIncome: '',
     maxIncome: '',
+    vendorProfilesOnly: false,
     sortBy: 'newest',
   });
   const [profiles, setProfiles] = useState([]);
@@ -316,6 +318,21 @@ const SearchScreen = ({ navigation }) => {
             onChangeText={(text) => setFilters({ ...filters, maxIncome: text })}
             keyboardType="numeric"
           />
+          {/* Vendor Profiles Only Filter */}
+          <View style={styles.switchContainer}>
+            <Text style={styles.switchLabel}>
+              Show vendor profiles only
+              {profileData?.profile?.isVendorCreated && (
+                <Text style={styles.switchSubtext}> (Profiles from your vendor)</Text>
+              )}
+            </Text>
+            <Switch
+              value={filters.vendorProfilesOnly || false}
+              onValueChange={(value) => setFilters({ ...filters, vendorProfilesOnly: value })}
+              trackColor={{ false: '#767577', true: '#ef4444' }}
+              thumbColor={filters.vendorProfilesOnly ? '#fff' : '#f4f3f4'}
+            />
+          </View>
           <TouchableOpacity style={styles.searchButton} onPress={handleSearch}>
             <Text style={styles.searchButtonText}>Search</Text>
           </TouchableOpacity>
@@ -359,6 +376,7 @@ const SearchScreen = ({ navigation }) => {
                     verificationStatus: '',
                     minIncome: '',
                     maxIncome: '',
+                    vendorProfilesOnly: false,
                     sortBy: 'newest',
                   });
                   setTimeout(() => handleSearch(), 100);
@@ -434,6 +452,27 @@ const styles = StyleSheet.create({
   searchButtonText: {
     color: '#fff',
     fontWeight: 'bold',
+  },
+  switchContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    marginBottom: 10,
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  switchLabel: {
+    fontSize: 14,
+    color: '#333',
+    flex: 1,
+  },
+  switchSubtext: {
+    fontSize: 12,
+    color: '#666',
   },
   loader: {
     marginTop: 50,

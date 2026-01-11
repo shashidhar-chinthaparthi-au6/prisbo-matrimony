@@ -1,6 +1,7 @@
 import Profile from '../models/Profile.js';
 import Interest from '../models/Interest.js';
 import Favorite from '../models/Favorite.js';
+import User from '../models/User.js';
 
 // @desc    Search profiles
 // @route   GET /api/search
@@ -24,6 +25,7 @@ export const searchProfiles = async (req, res) => {
       verificationStatus,
       minIncome,
       maxIncome,
+      vendorProfilesOnly,
       page = 1,
       limit = 20,
       sortBy = 'newest',
@@ -41,7 +43,7 @@ export const searchProfiles = async (req, res) => {
       deletedAt: null, // Exclude deleted profiles
     };
 
-    // Get user's profile to determine opposite type
+    // Get user's profile and user data to determine opposite type and vendor association
     const userProfile = await Profile.findOne({ userId });
     if (!userProfile) {
       return res.status(200).json({
@@ -55,6 +57,25 @@ export const searchProfiles = async (req, res) => {
           pages: 0,
         },
       });
+    }
+
+    // Get user data to check vendor association
+    const userData = await User.findById(userId).select('registeredViaVendor');
+
+    // Handle vendor profiles filter
+    if (vendorProfilesOnly === 'true' || vendorProfilesOnly === true) {
+      // If user's profile was created by a vendor, show only profiles from that vendor
+      if (userProfile.isVendorCreated && userProfile.createdBy) {
+        query.createdBy = userProfile.createdBy;
+        query.isVendorCreated = true;
+      } else if (userData?.registeredViaVendor) {
+        // If user registered via vendor, show only profiles created by that vendor
+        query.createdBy = userData.registeredViaVendor;
+        query.isVendorCreated = true;
+      } else {
+        // If user doesn't have a vendor association, show all vendor-created profiles
+        query.isVendorCreated = true;
+      }
     }
 
     // Set opposite type if not specified

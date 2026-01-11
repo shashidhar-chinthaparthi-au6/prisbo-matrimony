@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, FlatList, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, FlatList, Alert, TextInput, Modal } from 'react-native';
 import {
   getMyProfiles,
   getMyStats,
   deleteMyProfile,
+  approveProfile,
+  rejectProfile,
+  updateProfileStatus,
 } from '../services/vendorService';
 
 const VendorDashboardScreen = ({ navigation }) => {
@@ -12,6 +15,8 @@ const VendorDashboardScreen = ({ navigation }) => {
   const [profiles, setProfiles] = useState([]);
   const [stats, setStats] = useState(null);
   const [page, setPage] = useState(1);
+  const [rejectingProfile, setRejectingProfile] = useState(null);
+  const [rejectionReason, setRejectionReason] = useState('');
 
   useEffect(() => {
     if (activeTab === 'profiles') {
@@ -105,12 +110,42 @@ const VendorDashboardScreen = ({ navigation }) => {
 
       <View style={styles.actionButtons}>
         <TouchableOpacity
+          style={[styles.actionButton, styles.viewButton]}
+          onPress={() => navigation.navigate('ProfileDetail', { id: item._id })}
+        >
+          <Text style={styles.viewButtonText}>View</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
           style={[styles.actionButton, styles.editButton]}
           onPress={() => {
             Alert.alert('Edit Profile', 'Profile editing form would be implemented here');
           }}
         >
           <Text style={styles.editButtonText}>Edit</Text>
+        </TouchableOpacity>
+        {item.verificationStatus === 'pending' && (
+          <>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.approveButton]}
+              onPress={() => handleApprove(item._id)}
+            >
+              <Text style={styles.approveButtonText}>Approve</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.rejectButton]}
+              onPress={() => setRejectingProfile(item)}
+            >
+              <Text style={styles.rejectButtonText}>Reject</Text>
+            </TouchableOpacity>
+          </>
+        )}
+        <TouchableOpacity
+          style={[styles.actionButton, item.isActive ? styles.deactivateButton : styles.activateButton]}
+          onPress={() => handleStatusToggle(item)}
+        >
+          <Text style={item.isActive ? styles.deactivateButtonText : styles.activateButtonText}>
+            {item.isActive ? 'Deactivate' : 'Activate'}
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.actionButton, styles.deleteButton]}
@@ -210,6 +245,50 @@ const VendorDashboardScreen = ({ navigation }) => {
           )}
         </View>
       )}
+
+      {/* Reject Profile Modal */}
+      <Modal
+        visible={!!rejectingProfile}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => {
+          setRejectingProfile(null);
+          setRejectionReason('');
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Reject Profile</Text>
+            <Text style={styles.modalSubtitle}>Please provide a reason for rejecting this profile.</Text>
+            <TextInput
+              style={styles.reasonInput}
+              value={rejectionReason}
+              onChangeText={setRejectionReason}
+              placeholder="Enter rejection reason..."
+              multiline
+              numberOfLines={4}
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setRejectingProfile(null);
+                  setRejectionReason('');
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.confirmButton]}
+                onPress={handleReject}
+                disabled={!rejectionReason.trim()}
+              >
+                <Text style={styles.confirmButtonText}>Reject</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -415,6 +494,99 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   deleteButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  viewButton: {
+    backgroundColor: '#3b82f6',
+  },
+  viewButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  approveButton: {
+    backgroundColor: '#10b981',
+  },
+  approveButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  rejectButton: {
+    backgroundColor: '#ef4444',
+  },
+  rejectButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  activateButton: {
+    backgroundColor: '#10b981',
+  },
+  activateButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  deactivateButton: {
+    backgroundColor: '#f59e0b',
+  },
+  deactivateButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 20,
+    width: '90%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    color: '#333',
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 15,
+  },
+  reasonInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 10,
+    minHeight: 100,
+    textAlignVertical: 'top',
+    marginBottom: 20,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  modalButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginHorizontal: 5,
+  },
+  cancelButton: {
+    backgroundColor: '#e5e7eb',
+  },
+  cancelButtonText: {
+    color: '#333',
+    fontWeight: 'bold',
+  },
+  confirmButton: {
+    backgroundColor: '#ef4444',
+  },
+  confirmButtonText: {
     color: '#fff',
     fontWeight: 'bold',
   },

@@ -196,7 +196,23 @@ const Profile = () => {
     const hasCaste = religion.caste && religion.caste.trim() !== '';
     const hasMinimumPhotos = currentPhotos >= 3;
 
-    return hasFirstName && hasLastName && hasDateOfBirth && hasCity && hasState && hasReligion && hasCaste && hasMinimumPhotos;
+    const isReady = hasFirstName && hasLastName && hasDateOfBirth && hasCity && hasState && hasReligion && hasCaste && hasMinimumPhotos;
+    
+    // Debug: Log missing fields (only in development)
+    if (process.env.NODE_ENV === 'development' && !isReady) {
+      const missingFields = [];
+      if (!hasFirstName) missingFields.push('First Name');
+      if (!hasLastName) missingFields.push('Last Name');
+      if (!hasDateOfBirth) missingFields.push('Date of Birth');
+      if (!hasCity) missingFields.push('City');
+      if (!hasState) missingFields.push('State');
+      if (!hasReligion) missingFields.push('Religion');
+      if (!hasCaste) missingFields.push('Caste');
+      if (!hasMinimumPhotos) missingFields.push(`Photos (need ${3 - currentPhotos} more)`);
+      console.log('Missing required fields:', missingFields);
+    }
+
+    return isReady;
   };
 
   const handleSubmit = async (e) => {
@@ -1408,28 +1424,62 @@ const Profile = () => {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex space-x-4 bg-white p-4 rounded-lg shadow">
-            <button
-              type="submit"
-              disabled={saving || !isFormReadyToSubmit()}
-              className="px-6 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {saving ? 'Submitting...' : 'Submit Profile'}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setEditing(false);
-                if (data?.profile) {
-                  setFormData(data.profile);
-                } else {
-                  setFormData({});
-                }
-              }}
-              className="px-6 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
-            >
-              Cancel
-            </button>
+          <div className="flex flex-col space-y-4 bg-white p-4 rounded-lg shadow">
+            {/* Show missing fields message */}
+            {!isFormReadyToSubmit() && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 text-sm">
+                <p className="text-yellow-800 font-medium mb-1">Please complete the following to submit:</p>
+                <ul className="list-disc list-inside text-yellow-700 space-y-1">
+                  {(!formData.personalInfo?.firstName || formData.personalInfo?.firstName?.trim() === '') && (
+                    <li>First Name</li>
+                  )}
+                  {(!formData.personalInfo?.lastName || formData.personalInfo?.lastName?.trim() === '') && (
+                    <li>Last Name</li>
+                  )}
+                  {!formData.personalInfo?.dateOfBirth && (
+                    <li>Date of Birth</li>
+                  )}
+                  {(!formData.location?.city || formData.location?.city?.trim() === '') && (
+                    <li>City</li>
+                  )}
+                  {(!formData.location?.state || formData.location?.state?.trim() === '') && (
+                    <li>State</li>
+                  )}
+                  {(!formData.religion?.religion || formData.religion?.religion?.trim() === '') && (
+                    <li>Religion</li>
+                  )}
+                  {(!formData.religion?.caste || formData.religion?.caste?.trim() === '') && (
+                    <li>Caste</li>
+                  )}
+                  {photos.length < 3 && (
+                    <li>Photos (need {3 - photos.length} more - minimum 3 required)</li>
+                  )}
+                </ul>
+              </div>
+            )}
+            <div className="flex space-x-4">
+              <button
+                type="submit"
+                disabled={saving || !isFormReadyToSubmit()}
+                className="px-6 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {saving ? 'Submitting...' : 'Submit Profile'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditing(false);
+                  if (data?.profile) {
+                    setFormData(data.profile);
+                  } else {
+                    setFormData({});
+                  }
+                }}
+                className="px-6 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </form>
       ) : (
