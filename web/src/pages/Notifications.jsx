@@ -55,6 +55,13 @@ const Notifications = () => {
   const hasActiveSubscription = subscriptionData?.hasActiveSubscription;
 
   useEffect(() => {
+    // Skip subscription checks for super_admin and vendor
+    if (user?.role === 'super_admin' || user?.role === 'vendor') {
+      setShowSubscriptionModal(false);
+      setShowProfileIncompleteModal(false);
+      return;
+    }
+
     // Show subscription modal if user doesn't have active subscription
     if (subscriptionData && !hasActiveSubscription) {
       setShowSubscriptionModal(true);
@@ -68,7 +75,7 @@ const Notifications = () => {
         setShowProfileIncompleteModal(false);
       }
     }
-  }, [subscriptionData, hasActiveSubscription, profileData]);
+  }, [subscriptionData, hasActiveSubscription, profileData, user]);
 
   const handleMarkAsRead = async (id) => {
     try {

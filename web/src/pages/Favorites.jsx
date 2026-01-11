@@ -33,7 +33,8 @@ const Favorites = () => {
   const { data, refetch } = useQuery('favorites', getFavorites, {
     retry: false,
     onError: (error) => {
-      if (error.response?.status === 403 || error.response?.data?.requiresSubscription) {
+      // Skip subscription modal for super_admin and vendor
+      if (user?.role !== 'super_admin' && user?.role !== 'vendor' && (error.response?.status === 403 || error.response?.data?.requiresSubscription)) {
         setShowSubscriptionModal(true);
       }
     }
@@ -42,6 +43,13 @@ const Favorites = () => {
   const hasActiveSubscription = subscriptionData?.hasActiveSubscription;
 
   useEffect(() => {
+    // Skip subscription checks for super_admin and vendor
+    if (user?.role === 'super_admin' || user?.role === 'vendor') {
+      setShowSubscriptionModal(false);
+      setShowProfileIncompleteModal(false);
+      return;
+    }
+
     // Show subscription modal if user doesn't have active subscription
     if (subscriptionData && !hasActiveSubscription) {
       setShowSubscriptionModal(true);
@@ -55,7 +63,7 @@ const Favorites = () => {
         setShowProfileIncompleteModal(false);
       }
     }
-  }, [subscriptionData, hasActiveSubscription, profileData]);
+  }, [subscriptionData, hasActiveSubscription, profileData, user]);
 
   const handleRemove = async (profileId) => {
     try {

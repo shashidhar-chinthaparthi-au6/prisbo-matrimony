@@ -10,8 +10,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import SubscriptionRequiredModal from '../components/SubscriptionRequiredModal';
 import ProfileIncompleteModal from '../components/ProfileIncompleteModal';
 import { isProfileComplete } from '../utils/profileUtils';
+import { useAuth } from '../context/AuthContext';
 
 const ChatsScreen = ({ navigation, route }) => {
+  const { user } = useAuth();
   const [chats, setChats] = useState([]);
   const [selectedChat, setSelectedChat] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -32,6 +34,23 @@ const ChatsScreen = ({ navigation, route }) => {
 
   useEffect(() => {
     loadUserId();
+    // Skip subscription checks for super_admin and vendor
+    if (user?.role === 'super_admin' || user?.role === 'vendor') {
+      setShowSubscriptionModal(false);
+      setShowProfileIncompleteModal(false);
+      loadChats();
+      if (route.params?.chatId) {
+        setSelectedChat(route.params.chatId);
+      }
+      
+      // Auto-refresh chats every 5 seconds
+      const chatsInterval = setInterval(() => {
+        loadChats();
+      }, 5000);
+      
+      return () => clearInterval(chatsInterval);
+    }
+
     // Show subscription modal if user doesn't have active subscription
     if (subscriptionData && !hasActiveSubscription) {
       setShowSubscriptionModal(true);
@@ -56,7 +75,7 @@ const ChatsScreen = ({ navigation, route }) => {
         return () => clearInterval(chatsInterval);
       }
     }
-  }, [route.params, subscriptionData, hasActiveSubscription, profileData]);
+  }, [route.params, subscriptionData, hasActiveSubscription, profileData, user]);
 
   useEffect(() => {
     // Auto-select the latest chat when chats are loaded

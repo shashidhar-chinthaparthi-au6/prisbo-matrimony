@@ -17,6 +17,8 @@ import {
 } from '../services/vendorService';
 import { getImageUrl } from '../config/api';
 import toast from 'react-hot-toast';
+import { indianStates, stateCities } from '../utils/indianLocations';
+import { religions, casteCategories, casteSubCastes } from '../utils/religionData';
 
 const VendorDashboard = () => {
   const [activeTab, setActiveTab] = useState('profiles');
@@ -32,6 +34,19 @@ const VendorDashboard = () => {
   const [subscriptionsFilter, setSubscriptionsFilter] = useState({ status: '' });
   const [rejectingSubscription, setRejectingSubscription] = useState(null);
   const [subscriptionRejectionReason, setSubscriptionRejectionReason] = useState('');
+  const [formData, setFormData] = useState({
+    type: 'bride',
+    personalInfo: {},
+    familyInfo: {},
+    location: {},
+    education: {},
+    career: {},
+    religion: {},
+    preferences: {},
+    email: '',
+    phone: '',
+    userId: '', // Optional: if person already has account
+  });
   const navigate = useNavigate();
 
   const queryClient = useQueryClient();
@@ -179,6 +194,98 @@ const VendorDashboard = () => {
       },
     }
   );
+
+  const createProfileMutation = useMutation(
+    (data) => createProfileForPerson(data),
+    {
+      onSuccess: () => {
+        toast.success('Profile created successfully!');
+        queryClient.invalidateQueries(['vendorProfiles']);
+        queryClient.invalidateQueries(['vendorStats']);
+        setShowCreateForm(false);
+        setFormData({
+          type: 'bride',
+          personalInfo: {},
+          familyInfo: {},
+          location: {},
+          education: {},
+          career: {},
+          religion: {},
+          preferences: {},
+          email: '',
+          phone: '',
+          userId: '',
+        });
+      },
+      onError: (error) => {
+        toast.error(error.response?.data?.message || 'Failed to create profile');
+      },
+    }
+  );
+
+  const handleFieldChange = (section, field, value) => {
+    if (section === 'root') {
+      setFormData((prev) => ({
+        ...prev,
+        [field]: value,
+      }));
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        [section]: {
+          ...prev[section],
+          [field]: value,
+        },
+      }));
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    // Validate required fields
+    if (!formData.personalInfo?.firstName || !formData.personalInfo?.lastName) {
+      toast.error('First name and last name are required');
+      return;
+    }
+    if (!formData.personalInfo?.dateOfBirth) {
+      toast.error('Date of birth is required');
+      return;
+    }
+    if (!formData.location?.city || !formData.location?.state) {
+      toast.error('City and state are required');
+      return;
+    }
+    if (!formData.type) {
+      toast.error('Profile type (bride/groom) is required');
+      return;
+    }
+
+    try {
+      const profilePayload = {
+        type: formData.type,
+        personalInfo: formData.personalInfo,
+        familyInfo: formData.familyInfo || {},
+        location: formData.location,
+        education: formData.education || {},
+        career: formData.career || {},
+        religion: formData.religion || {},
+        preferences: formData.preferences || {},
+      };
+
+      // If userId is provided, use it; otherwise include email/phone for account creation
+      if (formData.userId) {
+        profilePayload.userId = formData.userId;
+      } else if (formData.email || formData.phone) {
+        profilePayload.email = formData.email;
+        profilePayload.phone = formData.phone;
+      }
+
+      await createProfileMutation.mutateAsync(profilePayload);
+    } catch (error) {
+      // Error is handled by mutation
+    }
+  };
 
   const handleApproveSubscription = (id) => {
     if (window.confirm('Are you sure you want to approve this subscription?')) {
@@ -896,35 +1003,447 @@ const VendorDashboard = () => {
         {/* Create/Edit Profile Modal */}
         {showCreateForm && (
           <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-            <div className="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+            <div className="relative top-10 mx-auto p-5 border w-11/12 md:w-4/5 lg:w-3/4 shadow-lg rounded-md bg-white max-h-[90vh] overflow-y-auto">
               <div className="mt-3">
                 <h3 className="text-lg font-medium text-gray-900 mb-4">
-                  {editingProfile ? 'Edit Profile' : 'Create New Profile'}
+                  Create New Profile
                 </h3>
-                <p className="text-sm text-gray-500 mb-4">
-                  Note: Profile creation form would go here. This is a placeholder for the full form implementation.
-                </p>
-                <div className="flex justify-end space-x-3">
-                  <button
-                    onClick={() => {
-                      setShowCreateForm(false);
-                      setEditingProfile(null);
-                    }}
-                    className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => {
-                      toast.info('Full profile creation form would be implemented here');
-                      setShowCreateForm(false);
-                      setEditingProfile(null);
-                    }}
-                    className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
-                  >
-                    {editingProfile ? 'Update' : 'Create'}
-                  </button>
-                </div>
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  {/* Profile Type */}
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Profile Type <span className="text-red-500">*</span>
+                    </label>
+                    <div className="flex gap-4">
+                      <label className="flex items-center">
+                        <input
+                          type="radio"
+                          value="bride"
+                          checked={formData.type === 'bride'}
+                          onChange={(e) => handleFieldChange('root', 'type', e.target.value)}
+                          className="mr-2"
+                          required
+                        />
+                        <span>Bride</span>
+                      </label>
+                      <label className="flex items-center">
+                        <input
+                          type="radio"
+                          value="groom"
+                          checked={formData.type === 'groom'}
+                          onChange={(e) => handleFieldChange('root', 'type', e.target.value)}
+                          className="mr-2"
+                        />
+                        <span>Groom</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* User Account Info (Optional) */}
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h4 className="text-sm font-medium text-gray-700 mb-3">User Account (Optional)</h4>
+                    <p className="text-xs text-gray-500 mb-3">
+                      If the person already has an account, enter their User ID. Otherwise, provide email/phone to create a new account.
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          User ID (if exists)
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.userId || ''}
+                          onChange={(e) => handleFieldChange('root', 'userId', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          placeholder="User ID"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Email
+                        </label>
+                        <input
+                          type="email"
+                          value={formData.email || ''}
+                          onChange={(e) => handleFieldChange('root', 'email', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          placeholder="Email"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Phone
+                        </label>
+                        <input
+                          type="tel"
+                          value={formData.phone || ''}
+                          onChange={(e) => handleFieldChange('root', 'phone', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          placeholder="Phone"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Personal Information */}
+                  <div className="bg-white border rounded-lg p-4">
+                    <h4 className="text-sm font-medium text-gray-700 mb-3">Personal Information</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          First Name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.personalInfo?.firstName || ''}
+                          onChange={(e) => handleFieldChange('personalInfo', 'firstName', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Last Name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.personalInfo?.lastName || ''}
+                          onChange={(e) => handleFieldChange('personalInfo', 'lastName', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Date of Birth <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="date"
+                          value={formData.personalInfo?.dateOfBirth || ''}
+                          onChange={(e) => handleFieldChange('personalInfo', 'dateOfBirth', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Height
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.personalInfo?.height || ''}
+                          onChange={(e) => handleFieldChange('personalInfo', 'height', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          placeholder="e.g., 5'6&quot; or 168 cm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Weight
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.personalInfo?.weight || ''}
+                          onChange={(e) => handleFieldChange('personalInfo', 'weight', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          placeholder="e.g., 65 kg"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Marital Status
+                        </label>
+                        <select
+                          value={formData.personalInfo?.maritalStatus || ''}
+                          onChange={(e) => handleFieldChange('personalInfo', 'maritalStatus', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        >
+                          <option value="">Select</option>
+                          <option value="Never Married">Never Married</option>
+                          <option value="Divorced">Divorced</option>
+                          <option value="Widowed">Widowed</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Complexion
+                        </label>
+                        <select
+                          value={formData.personalInfo?.complexion || ''}
+                          onChange={(e) => handleFieldChange('personalInfo', 'complexion', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        >
+                          <option value="">Select</option>
+                          <option value="Fair">Fair</option>
+                          <option value="Wheatish">Wheatish</option>
+                          <option value="Wheatish Brown">Wheatish Brown</option>
+                          <option value="Dark">Dark</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Mother Tongue
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.personalInfo?.motherTongue || ''}
+                          onChange={(e) => handleFieldChange('personalInfo', 'motherTongue', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          placeholder="e.g., Hindi, English"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Location */}
+                  <div className="bg-white border rounded-lg p-4">
+                    <h4 className="text-sm font-medium text-gray-700 mb-3">Location</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          State <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          value={formData.location?.state || ''}
+                          onChange={(e) => {
+                            handleFieldChange('location', 'state', e.target.value);
+                            handleFieldChange('location', 'city', ''); // Reset city when state changes
+                          }}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          required
+                        >
+                          <option value="">Select State</option>
+                          {indianStates.map((state) => (
+                            <option key={state} value={state}>
+                              {state}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          City <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          value={formData.location?.city || ''}
+                          onChange={(e) => handleFieldChange('location', 'city', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          required
+                          disabled={!formData.location?.state}
+                        >
+                          <option value="">Select City</option>
+                          {formData.location?.state && stateCities[formData.location.state]?.map((city) => (
+                            <option key={city} value={city}>
+                              {city}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Country
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.location?.country || 'India'}
+                          onChange={(e) => handleFieldChange('location', 'country', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Religion */}
+                  <div className="bg-white border rounded-lg p-4">
+                    <h4 className="text-sm font-medium text-gray-700 mb-3">Religion</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Religion
+                        </label>
+                        <select
+                          value={formData.religion?.religion || ''}
+                          onChange={(e) => {
+                            handleFieldChange('religion', 'religion', e.target.value);
+                            handleFieldChange('religion', 'caste', ''); // Reset caste when religion changes
+                          }}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        >
+                          <option value="">Select Religion</option>
+                          {religions.map((religion) => (
+                            <option key={religion} value={religion}>
+                              {religion}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Caste
+                        </label>
+                        <select
+                          value={formData.religion?.caste || ''}
+                          onChange={(e) => handleFieldChange('religion', 'caste', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          disabled={!formData.religion?.religion}
+                        >
+                          <option value="">Select Caste</option>
+                          {formData.religion?.religion && casteCategories[formData.religion.religion]?.map((caste) => (
+                            <option key={caste} value={caste}>
+                              {caste}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Education */}
+                  <div className="bg-white border rounded-lg p-4">
+                    <h4 className="text-sm font-medium text-gray-700 mb-3">Education</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Education Level
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.education?.level || ''}
+                          onChange={(e) => handleFieldChange('education', 'level', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          placeholder="e.g., B.Tech, MBA"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Institution
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.education?.institution || ''}
+                          onChange={(e) => handleFieldChange('education', 'institution', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          placeholder="College/University"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Career */}
+                  <div className="bg-white border rounded-lg p-4">
+                    <h4 className="text-sm font-medium text-gray-700 mb-3">Career</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Occupation
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.career?.occupation || ''}
+                          onChange={(e) => handleFieldChange('career', 'occupation', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          placeholder="e.g., Software Engineer"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Annual Income
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.career?.income || ''}
+                          onChange={(e) => handleFieldChange('career', 'income', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          placeholder="e.g., 5-10 Lakhs"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Family Info */}
+                  <div className="bg-white border rounded-lg p-4">
+                    <h4 className="text-sm font-medium text-gray-700 mb-3">Family Information</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Father's Name
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.familyInfo?.fatherName || ''}
+                          onChange={(e) => handleFieldChange('familyInfo', 'fatherName', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Father's Occupation
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.familyInfo?.fatherOccupation || ''}
+                          onChange={(e) => handleFieldChange('familyInfo', 'fatherOccupation', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Mother's Name
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.familyInfo?.motherName || ''}
+                          onChange={(e) => handleFieldChange('familyInfo', 'motherName', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Mother's Occupation
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.familyInfo?.motherOccupation || ''}
+                          onChange={(e) => handleFieldChange('familyInfo', 'motherOccupation', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Form Actions */}
+                  <div className="flex justify-end space-x-3 pt-4 border-t">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCreateForm(false);
+                        setFormData({
+                          type: 'bride',
+                          personalInfo: {},
+                          familyInfo: {},
+                          location: {},
+                          education: {},
+                          career: {},
+                          religion: {},
+                          preferences: {},
+                          email: '',
+                          phone: '',
+                          userId: '',
+                        });
+                      }}
+                      className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={createProfileMutation.isLoading}
+                      className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50"
+                    >
+                      {createProfileMutation.isLoading ? 'Creating...' : 'Create Profile'}
+                    </button>
+                  </div>
+                </form>
               </div>
             </div>
           </div>

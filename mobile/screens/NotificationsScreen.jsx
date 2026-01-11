@@ -7,8 +7,10 @@ import { getNotifications, markAsRead, markAllAsRead, deleteNotification, delete
 import SubscriptionRequiredModal from '../components/SubscriptionRequiredModal';
 import ProfileIncompleteModal from '../components/ProfileIncompleteModal';
 import { isProfileComplete } from '../utils/profileUtils';
+import { useAuth } from '../context/AuthContext';
 
 const NotificationsScreen = ({ navigation }) => {
+  const { user } = useAuth();
   const [filter, setFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [notifications, setNotifications] = useState([]);
@@ -24,7 +26,8 @@ const NotificationsScreen = ({ navigation }) => {
   const hasActiveSubscription = subscriptionData?.hasActiveSubscription;
 
   const loadNotifications = async () => {
-    if (!hasActiveSubscription) {
+    // Skip subscription check for super_admin and vendor
+    if (user?.role !== 'super_admin' && user?.role !== 'vendor' && !hasActiveSubscription) {
       setShowSubscriptionModal(true);
       return;
     }
@@ -36,7 +39,8 @@ const NotificationsScreen = ({ navigation }) => {
       setNotifications(response.notifications || []);
       setUnreadCount(response.unreadCount || 0);
     } catch (error) {
-      if (error.response?.status === 403 || error.response?.data?.requiresSubscription) {
+      // Skip subscription modal for super_admin and vendor
+      if (user?.role !== 'super_admin' && user?.role !== 'vendor' && (error.response?.status === 403 || error.response?.data?.requiresSubscription)) {
         setShowSubscriptionModal(true);
       } else {
         alert(error.response?.data?.message || 'Failed to load notifications');
@@ -47,6 +51,15 @@ const NotificationsScreen = ({ navigation }) => {
   };
 
   useEffect(() => {
+    // Skip subscription checks for super_admin and vendor
+    if (user?.role === 'super_admin' || user?.role === 'vendor') {
+      setShowSubscriptionModal(false);
+      setShowProfileIncompleteModal(false);
+      loadNotifications();
+      const interval = setInterval(loadNotifications, 5000);
+      return () => clearInterval(interval);
+    }
+
     // Show subscription modal if user doesn't have active subscription
     if (subscriptionData && !hasActiveSubscription) {
       setShowSubscriptionModal(true);
@@ -63,7 +76,7 @@ const NotificationsScreen = ({ navigation }) => {
         return () => clearInterval(interval);
       }
     }
-  }, [filter, subscriptionData, hasActiveSubscription, profileData]);
+  }, [filter, subscriptionData, hasActiveSubscription, profileData, user]);
 
   const handleNotificationPress = async (notification) => {
     if (!notification.isRead) {

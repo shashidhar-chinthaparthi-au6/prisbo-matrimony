@@ -10,6 +10,7 @@ import SubscriptionRequiredModal from '../components/SubscriptionRequiredModal';
 import ProfileIncompleteModal from '../components/ProfileIncompleteModal';
 import ProfileVerificationPendingModal from '../components/ProfileVerificationPendingModal';
 import { isProfileComplete } from '../utils/profileUtils';
+import { useAuth } from '../context/AuthContext';
 
 const SearchScreen = ({ navigation }) => {
   const { user } = useAuth();
@@ -45,6 +46,18 @@ const SearchScreen = ({ navigation }) => {
   }, []);
 
   useEffect(() => {
+    // Skip subscription checks for super_admin and vendor
+    if (user?.role === 'super_admin' || user?.role === 'vendor') {
+      setShowSubscriptionModal(false);
+      setShowProfileIncompleteModal(false);
+      setShowVerificationPendingModal(false);
+      if (hasProfile && !checkingProfile && !hasSearchedRef.current) {
+        hasSearchedRef.current = true;
+        performSearch();
+      }
+      return;
+    }
+
     // Priority: Subscription > Profile Verification > Profile Completion
     if (subscriptionData && !hasActiveSubscription) {
       setShowSubscriptionModal(true);
@@ -74,7 +87,7 @@ const SearchScreen = ({ navigation }) => {
         }
       }
     }
-  }, [hasProfile, checkingProfile, hasActiveSubscription, subscriptionData, profileData]);
+  }, [hasProfile, checkingProfile, hasActiveSubscription, subscriptionData, profileData, user]);
 
   const performSearch = async () => {
     if (!hasProfile) {

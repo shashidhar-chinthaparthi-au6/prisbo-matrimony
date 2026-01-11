@@ -77,6 +77,15 @@ const Search = () => {
   const hasActiveSubscription = subscriptionData?.hasActiveSubscription;
 
   useEffect(() => {
+    // Skip subscription checks for super_admin and vendor
+    if (user?.role === 'super_admin' || user?.role === 'vendor') {
+      setShowSubscriptionModal(false);
+      setShowProfileIncompleteModal(false);
+      // Refetch for vendors and super_admin
+      refetch();
+      return;
+    }
+
     // Show subscription modal if user doesn't have active subscription
     if (subscriptionData && !hasActiveSubscription) {
       setShowSubscriptionModal(true);
@@ -92,10 +101,11 @@ const Search = () => {
         refetch();
       }
     }
-  }, [filters.page, hasActiveSubscription, subscriptionData, profileData]);
+  }, [filters.page, hasActiveSubscription, subscriptionData, profileData, user]);
 
   const handleSearch = () => {
-    if (!hasActiveSubscription) {
+    // Skip subscription check for super_admin and vendor
+    if (user?.role !== 'super_admin' && user?.role !== 'vendor' && !hasActiveSubscription) {
       setShowSubscriptionModal(true);
       return;
     }
@@ -103,7 +113,8 @@ const Search = () => {
   };
 
   const handleViewProfile = (profileId) => {
-    if (!hasActiveSubscription) {
+    // Skip subscription check for super_admin and vendor
+    if (user?.role !== 'super_admin' && user?.role !== 'vendor' && !hasActiveSubscription) {
       setShowSubscriptionModal(true);
       return;
     }
@@ -420,7 +431,7 @@ const Search = () => {
         </div>
       )}
 
-      {!hasActiveSubscription && subscriptionData ? (
+      {!hasActiveSubscription && subscriptionData && user?.role !== 'super_admin' && user?.role !== 'vendor' ? (
         <div className="text-center py-12">
           <div className="bg-white rounded-lg shadow p-8 max-w-md mx-auto">
             <h2 className="text-2xl font-bold text-gray-900 mb-4">Subscription Required</h2>

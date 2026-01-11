@@ -39,8 +39,8 @@ const ProfileDetailScreen = ({ route, navigation }) => {
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
 
   useEffect(() => {
-    // Don't show modals for own profile
-    if (isMyProfile) {
+    // Don't show modals for own profile, super_admin, or vendor
+    if (isMyProfile || user?.role === 'super_admin' || user?.role === 'vendor') {
       setShowSubscriptionModal(false);
       setShowProfileIncompleteModal(false);
       return;
@@ -59,10 +59,11 @@ const ProfileDetailScreen = ({ route, navigation }) => {
         setShowProfileIncompleteModal(false);
       }
     }
-  }, [data, isMyProfile, hasActiveSubscription, subscriptionData, myProfileData]);
+  }, [data, isMyProfile, hasActiveSubscription, subscriptionData, myProfileData, user]);
 
   const handleSendInterest = async () => {
-    if (!hasActiveSubscription) {
+    // Skip subscription check for super_admin and vendor
+    if (user?.role !== 'super_admin' && user?.role !== 'vendor' && !hasActiveSubscription) {
       setShowSubscriptionModal(true);
       return;
     }

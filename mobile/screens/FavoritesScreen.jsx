@@ -9,8 +9,10 @@ import { getImageUrl } from '../config/api';
 import SubscriptionRequiredModal from '../components/SubscriptionRequiredModal';
 import ProfileIncompleteModal from '../components/ProfileIncompleteModal';
 import { isProfileComplete } from '../utils/profileUtils';
+import { useAuth } from '../context/AuthContext';
 
 const FavoritesScreen = ({ navigation }) => {
+  const { user } = useAuth();
   const [favorites, setFavorites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [count, setCount] = useState(0);
@@ -26,6 +28,15 @@ const FavoritesScreen = ({ navigation }) => {
   const hasActiveSubscription = subscriptionData?.hasActiveSubscription;
 
   useEffect(() => {
+    // Skip subscription checks for super_admin and vendor
+    if (user?.role === 'super_admin' || user?.role === 'vendor') {
+      setShowSubscriptionModal(false);
+      setShowProfileIncompleteModal(false);
+      loadFavorites();
+      const interval = setInterval(loadFavorites, 5000);
+      return () => clearInterval(interval);
+    }
+
     // Show subscription modal if user doesn't have active subscription
     if (subscriptionData && !hasActiveSubscription) {
       setShowSubscriptionModal(true);
@@ -42,10 +53,11 @@ const FavoritesScreen = ({ navigation }) => {
         return () => clearInterval(interval);
       }
     }
-  }, [subscriptionData, hasActiveSubscription, profileData]);
+  }, [subscriptionData, hasActiveSubscription, profileData, user]);
 
   const loadFavorites = async () => {
-    if (!hasActiveSubscription) {
+    // Skip subscription check for super_admin and vendor
+    if (user?.role !== 'super_admin' && user?.role !== 'vendor' && !hasActiveSubscription) {
       setShowSubscriptionModal(true);
       return;
     }
@@ -55,7 +67,8 @@ const FavoritesScreen = ({ navigation }) => {
       setFavorites(response.favorites || []);
       setCount(response.count || 0);
     } catch (error) {
-      if (error.response?.status === 403 || error.response?.data?.requiresSubscription) {
+      // Skip subscription modal for super_admin and vendor
+      if (user?.role !== 'super_admin' && user?.role !== 'vendor' && (error.response?.status === 403 || error.response?.data?.requiresSubscription)) {
         setShowSubscriptionModal(true);
       } else {
       alert(error.response?.data?.message || 'Failed to load favorites');

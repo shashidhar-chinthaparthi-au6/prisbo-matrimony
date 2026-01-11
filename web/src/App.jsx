@@ -73,6 +73,14 @@ const AppRoutes = () => {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/notifications"
+          element={
+            <ProtectedRoute>
+              <Notifications />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/*" element={<NotFound />} />
       </Routes>
     );
@@ -108,6 +116,14 @@ const AppRoutes = () => {
           element={
             <ProtectedRoute>
               <ProfileDetail />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/notifications"
+          element={
+            <ProtectedRoute>
+              <Notifications />
             </ProtectedRoute>
           }
         />

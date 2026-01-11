@@ -29,6 +29,15 @@ const InterestsScreen = ({ navigation }) => {
   const hasActiveSubscription = subscriptionData?.hasActiveSubscription;
 
   useEffect(() => {
+    // Skip subscription checks for super_admin and vendor
+    if (user?.role === 'super_admin' || user?.role === 'vendor') {
+      setShowSubscriptionModal(false);
+      setShowProfileIncompleteModal(false);
+      loadData();
+      const interval = setInterval(loadData, 5000);
+      return () => clearInterval(interval);
+    }
+
     // Show subscription modal if user doesn't have active subscription
     if (subscriptionData && !hasActiveSubscription) {
       setShowSubscriptionModal(true);
@@ -45,10 +54,11 @@ const InterestsScreen = ({ navigation }) => {
     return () => clearInterval(interval);
       }
     }
-  }, [activeTab, subscriptionData, hasActiveSubscription, profileData]);
+  }, [activeTab, subscriptionData, hasActiveSubscription, profileData, user]);
 
   const loadData = async () => {
-    if (!hasActiveSubscription) {
+    // Skip subscription check for super_admin and vendor
+    if (user?.role !== 'super_admin' && user?.role !== 'vendor' && !hasActiveSubscription) {
       setShowSubscriptionModal(true);
       return;
     }
