@@ -150,18 +150,49 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin', 'Access-Control-Request-Method', 'Access-Control-Request-Headers'],
   exposedHeaders: ['Content-Type', 'Authorization'],
   preflightContinue: false,
   optionsSuccessStatus: 204,
   maxAge: 86400, // 24 hours
 };
 
-// Apply CORS middleware first
-app.use(cors(corsOptions));
+// Handle preflight requests FIRST, before any other middleware
+app.options('*', (req, res) => {
+  const origin = req.headers.origin;
+  
+  // Check if origin should be allowed
+  let allowed = false;
+  if (!origin) {
+    allowed = true;
+  } else if (origin.includes('.vercel.app')) {
+    allowed = true;
+  } else if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
+    allowed = true;
+  } else if (process.env.NODE_ENV === 'development') {
+    allowed = true;
+  } else {
+    const allowedOrigins = [
+      process.env.WEB_URL,
+      process.env.MOBILE_URL,
+    ].filter(Boolean);
+    allowed = allowedOrigins.includes(origin);
+  }
+  
+  if (allowed) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Access-Control-Request-Method, Access-Control-Request-Headers');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Max-Age', '86400');
+    return res.status(204).end();
+  }
+  
+  res.status(403).json({ success: false, message: 'CORS: Origin not allowed' });
+});
 
-// Handle preflight requests explicitly (additional safety)
-app.options('*', cors(corsOptions));
+// Apply CORS middleware
+app.use(cors(corsOptions));
 
 // Security headers (helmet)
 app.use(securityHeaders);
@@ -221,6 +252,17 @@ app.get('/api/health', (req, res) => {
 
 // 404 handler
 app.use((req, res) => {
+  // Set CORS headers on 404 responses
+  const origin = req.headers.origin;
+  if (origin && (origin.includes('.vercel.app') || 
+                 origin.startsWith('http://localhost:') || 
+                 origin.startsWith('http://127.0.0.1:') ||
+                 process.env.NODE_ENV === 'development' ||
+                 [process.env.WEB_URL, process.env.MOBILE_URL].filter(Boolean).includes(origin))) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+  }
+  
   res.status(404).json({
     success: false,
     message: 'Route not found',
@@ -230,6 +272,17 @@ app.use((req, res) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
+  // Set CORS headers on error responses
+  const origin = req.headers.origin;
+  if (origin && (origin.includes('.vercel.app') || 
+                 origin.startsWith('http://localhost:') || 
+                 origin.startsWith('http://127.0.0.1:') ||
+                 process.env.NODE_ENV === 'development' ||
+                 [process.env.WEB_URL, process.env.MOBILE_URL].filter(Boolean).includes(origin))) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+  }
+  
   // Don't log stack in production for security
   if (process.env.NODE_ENV === 'development') {
     console.error('Error:', err.message);

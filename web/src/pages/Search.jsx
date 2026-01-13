@@ -6,6 +6,8 @@ import { searchProfiles } from '../services/searchService';
 import { getMyProfile } from '../services/profileService';
 import { getCurrentSubscription } from '../services/subscriptionService';
 import { getOrCreateChat } from '../services/chatService';
+import { addFavorite, removeFavorite, getFavorites } from '../services/favoriteService';
+import { sendInterest } from '../services/interestService';
 import { getImageUrl } from '../config/api';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -49,6 +51,8 @@ const Search = () => {
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [showProfileIncompleteModal, setShowProfileIncompleteModal] = useState(false);
   const [savedSearches, setSavedSearches] = useState([]);
+  const [profileImageIndices, setProfileImageIndices] = useState({}); // Track current image index for each profile
+  const [favorites, setFavorites] = useState(new Set()); // Track favorite profile IDs
 
   const { data: profileData } = useQuery('myProfile', getMyProfile);
   const { data: subscriptionData } = useQuery(
@@ -61,6 +65,16 @@ const Search = () => {
       onError: () => {}, // Silently handle errors
     }
   );
+  const { data: favoritesData } = useQuery('favorites', getFavorites, {
+    enabled: !!user && !!localStorage.getItem('token'),
+    retry: false,
+    onSuccess: (data) => {
+      if (data?.favorites) {
+        const favoriteIds = new Set(data.favorites.map(f => f.profileId?._id || f.profileId));
+        setFavorites(favoriteIds);
+      }
+    },
+  });
   const { data, isLoading, refetch, error } = useQuery(
     ['search', filters],
     () => searchProfiles(filters),
@@ -190,6 +204,67 @@ const Search = () => {
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to start chat');
     }
+  };
+
+  const handleToggleFavorite = async (e, profileId) => {
+    e.stopPropagation();
+    if (!hasActiveSubscription && user?.role !== 'super_admin' && user?.role !== 'vendor') {
+      setShowSubscriptionModal(true);
+      return;
+    }
+    try {
+      const isFavorite = favorites.has(profileId);
+      if (isFavorite) {
+        await removeFavorite(profileId);
+        setFavorites(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(profileId);
+          return newSet;
+        });
+        toast.success('Removed from favorites');
+      } else {
+        await addFavorite(profileId);
+        setFavorites(prev => new Set(prev).add(profileId));
+        toast.success('Added to favorites');
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to update favorite');
+    }
+  };
+
+  const handleSendInterest = async (e, profileId, userId) => {
+    e.stopPropagation();
+    if (!hasActiveSubscription && user?.role !== 'super_admin' && user?.role !== 'vendor') {
+      setShowSubscriptionModal(true);
+      return;
+    }
+    try {
+      await sendInterest({ toUserId: userId });
+      toast.success('Interest sent successfully!');
+      // Refetch to update interest status
+      refetch();
+    } catch (error) {
+      if (error.response?.data?.message === 'Interest already exists') {
+        toast.info('Interest already sent');
+      } else {
+        toast.error(error.response?.data?.message || 'Failed to send interest');
+      }
+    }
+  };
+
+  const handleImageNavigation = (e, profileId, direction) => {
+    e.stopPropagation();
+    const profile = data?.profiles?.find(p => p._id === profileId);
+    if (!profile?.photos || profile.photos.length <= 1) return;
+
+    const currentIndex = profileImageIndices[profileId] || 0;
+    let newIndex;
+    if (direction === 'next') {
+      newIndex = (currentIndex + 1) % profile.photos.length;
+    } else {
+      newIndex = currentIndex === 0 ? profile.photos.length - 1 : currentIndex - 1;
+    }
+    setProfileImageIndices(prev => ({ ...prev, [profileId]: newIndex }));
   };
 
   // Check if user has created profile
@@ -454,56 +529,130 @@ const Search = () => {
       ) : data?.profiles?.length > 0 ? (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {data.profiles.map((profile) => (
-              <div key={profile._id} className="bg-white rounded-lg shadow overflow-hidden cursor-pointer hover:shadow-lg transition-shadow">
-                <div 
-                  className="h-48 bg-gray-200 relative cursor-pointer"
-                  onClick={() => handleViewProfile(profile._id)}
-                >
-                  {profile.photos?.[0]?.url ? (
-                    <img
-                      src={getImageUrl(profile.photos[0].url)}
-                      alt={profile.personalInfo?.firstName}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-gray-400">
-                      No Photo
-                    </div>
-                  )}
-                </div>
-                <div className="p-4">
-                  <h3 
-                    className="font-semibold text-lg cursor-pointer hover:text-primary-600 transition-colors"
+            {data.profiles.map((profile) => {
+              const currentImageIndex = profileImageIndices[profile._id] || 0;
+              const photos = profile.photos || [];
+              const currentPhoto = photos[currentImageIndex];
+              const isFavorite = favorites.has(profile._id);
+              const hasMultiplePhotos = photos.length > 1;
+
+              return (
+                <div key={profile._id} className="bg-white rounded-lg shadow overflow-hidden cursor-pointer hover:shadow-lg transition-shadow">
+                  <div 
+                    className="h-48 bg-gray-200 relative cursor-pointer group"
                     onClick={() => handleViewProfile(profile._id)}
                   >
-                    {profile.personalInfo?.firstName} {profile.personalInfo?.lastName}
-                  </h3>
-                  <p className="text-gray-600 text-sm">
-                    {profile.personalInfo?.age} years, {profile.location?.city}
-                  </p>
-                  <div className="mt-4 flex space-x-2">
-                    <button
-                      onClick={() => handleViewProfile(profile._id)}
-                      className="text-primary-600 hover:text-primary-700 text-sm font-medium"
-                    >
-                      View Profile →
-                    </button>
-                    {profile.interestStatus === 'accepted' && (
+                    {/* Action buttons on top */}
+                    <div className="absolute top-2 right-2 z-10 flex gap-2">
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleChat(profile.userId._id);
-                        }}
-                        className="text-primary-600 hover:text-primary-700 text-sm font-medium"
+                        onClick={(e) => handleToggleFavorite(e, profile._id)}
+                        className={`p-2 rounded-full shadow-lg backdrop-blur-sm transition-all ${
+                          isFavorite 
+                            ? 'bg-red-500 text-white hover:bg-red-600' 
+                            : 'bg-white/90 text-gray-700 hover:bg-white'
+                        }`}
+                        title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
                       >
-                        Chat →
+                        <svg className="w-5 h-5" fill={isFavorite ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                        </svg>
                       </button>
+                      <button
+                        onClick={(e) => handleSendInterest(e, profile._id, profile.userId?._id)}
+                        className="p-2 rounded-full bg-white/90 text-primary-600 shadow-lg backdrop-blur-sm hover:bg-white transition-all"
+                        title="Send Interest"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                        </svg>
+                      </button>
+                    </div>
+
+                    {/* Image with navigation arrows */}
+                    {currentPhoto?.url ? (
+                      <>
+                        <img
+                          src={getImageUrl(currentPhoto.url)}
+                          alt={profile.personalInfo?.firstName}
+                          className="w-full h-full object-cover"
+                        />
+                        {hasMultiplePhotos && (
+                          <>
+                            {/* Left arrow */}
+                            <button
+                              onClick={(e) => handleImageNavigation(e, profile._id, 'prev')}
+                              className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-black/50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70 z-10"
+                              title="Previous photo"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                              </svg>
+                            </button>
+                            {/* Right arrow */}
+                            <button
+                              onClick={(e) => handleImageNavigation(e, profile._id, 'next')}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-black/50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70 z-10"
+                              title="Next photo"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                              </svg>
+                            </button>
+                            {/* Photo indicator dots */}
+                            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1 z-10">
+                              {photos.map((_, index) => (
+                                <div
+                                  key={index}
+                                  className={`w-2 h-2 rounded-full transition-all ${
+                                    index === currentImageIndex 
+                                      ? 'bg-white' 
+                                      : 'bg-white/50'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </>
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-gray-400">
+                        No Photo
+                      </div>
                     )}
                   </div>
+                  <div className="p-4">
+                    <h3 
+                      className="font-semibold text-lg cursor-pointer hover:text-primary-600 transition-colors"
+                      onClick={() => handleViewProfile(profile._id)}
+                    >
+                      {profile.personalInfo?.firstName} {profile.personalInfo?.lastName}
+                    </h3>
+                    <p className="text-gray-600 text-sm">
+                      {profile.personalInfo?.age} years, {profile.location?.city}
+                    </p>
+                    <div className="mt-4 flex space-x-2">
+                      <button
+                        onClick={() => handleViewProfile(profile._id)}
+                        className="text-primary-600 hover:text-primary-700 text-sm font-medium"
+                      >
+                        View Profile →
+                      </button>
+                      {profile.interestStatus === 'accepted' && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleChat(profile.userId._id);
+                          }}
+                          className="text-primary-600 hover:text-primary-700 text-sm font-medium"
+                        >
+                          Chat →
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           {data.pagination && (
             <div className="mt-6 flex flex-col items-center space-y-4">

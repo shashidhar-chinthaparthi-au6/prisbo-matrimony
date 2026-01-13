@@ -8,7 +8,7 @@ export const securityHeaders = helmet({
       styleSrc: ["'self'", "'unsafe-inline'"],
       scriptSrc: ["'self'"],
       imgSrc: ["'self'", "data:", "https:", "http:"],
-      connectSrc: ["'self'"],
+      connectSrc: ["'self'", "https:", "http:"], // Allow cross-origin API calls
       fontSrc: ["'self'"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
@@ -17,6 +17,8 @@ export const securityHeaders = helmet({
   },
   crossOriginEmbedderPolicy: false, // Allow cross-origin resources
   crossOriginResourcePolicy: { policy: "cross-origin" }, // Allow cross-origin resources
+  // Don't interfere with CORS headers
+  crossOriginOpenerPolicy: false,
 });
 
 // XSS protection middleware
